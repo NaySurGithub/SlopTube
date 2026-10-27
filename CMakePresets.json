@@ -1,0 +1,34 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}"
+    },
+    {
+      "name": "host-debug",
+      "displayName": "Host CLI (Debug)",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "android-debug",
+      "displayName": "Android arm64 (Debug)",
+      "inherits": "base",
+      "cacheVariables": { "SLOPTUBE_PLATFORM": "android", "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "android-release",
+      "displayName": "Android arm64 (Release)",
+      "inherits": "base",
+      "cacheVariables": { "SLOPTUBE_PLATFORM": "android", "CMAKE_BUILD_TYPE": "Release" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "host-debug", "configurePreset": "host-debug" },
+    { "name": "android-debug", "configurePreset": "android-debug", "targets": ["apk"] },
+    { "name": "android-release", "configurePreset": "android-release", "targets": ["apk"] }
+  ]
+}

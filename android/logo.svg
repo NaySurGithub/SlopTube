@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
+  <!-- SlopTube logo: a rounded play glyph melting into two drips. Source of the launcher icon
+       (cmake/AndroidPackaging.cmake) and of the launch animation (cmake/Logo.cmake): keep one
+       id per path, absolute M/L/C/Z commands only, one stroke width and two gradient stops. -->
+  <defs>
+    <linearGradient id="fill" gradientUnits="userSpaceOnUse" x1="38" y1="26" x2="82" y2="84">
+      <stop offset="0" stop-color="#FF0033"/>
+      <stop offset="1" stop-color="#FD2389"/>
+    </linearGradient>
+  </defs>
+  <path id="play" d="M42,30 L42,70 L78,50 Z" fill="url(#fill)" stroke="url(#fill)" stroke-width="8" stroke-linejoin="round"/>
+  <path id="drips" d="M43,62 C46,64 46,68 46,72 L46,80 C46,82.485 48.015,84.5 50.5,84.5 C52.985,84.5 55,82.485 55,80 L55,68 C55,62 58,60 62,58 Z M58,58 C60,60 60,62 60,66 L60,70 C60,71.933 61.567,73.5 63.5,73.5 C65.433,73.5 67,71.933 67,70 L67,56 C67,54 68,53 70,52 Z" fill="url(#fill)"/>
+</svg>

@@ -1,0 +1,35 @@
+---
+Language: Cpp
+BasedOnStyle: LLVM
+Standard: Latest
+ColumnLimit: 100
+IndentWidth: 4
+AccessModifierOffset: -4
+NamespaceIndentation: None
+PointerAlignment: Left
+ReferenceAlignment: Left
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortEnumsOnASingleLine: false
+AlwaysBreakTemplateDeclarations: Yes
+BreakBeforeBraces: Attach
+BreakConstructorInitializers: BeforeComma
+PackConstructorInitializers: Never
+FixNamespaceComments: true
+InsertBraces: true
+InsertNewlineAtEOF: true
+SeparateDefinitionBlocks: Always
+SortIncludes: CaseSensitive
+IncludeBlocks: Regroup
+IncludeCategories:
+  # Project headers
+  - Regex: '^"'
+    Priority: 1
+  # Third-party libraries
+  - Regex: '^<(curl|simdjson|imgui|mbedtls|android|EGL|GLES|media|aaudio|jni)'
+    Priority: 2
+  # Standard library
+  - Regex: '^<'
+    Priority: 3
+...
