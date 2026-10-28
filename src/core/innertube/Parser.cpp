@@ -260,6 +260,7 @@ void appendFormats(Element streamingData, std::string_view key, std::vector<Form
             .drc = json::boolean(entry, "/isDrc"),
             .defaultAudio = json::string(entry, "/audioTrack/id").empty() ||
                             json::boolean(entry, "/audioTrack/audioIsDefault"),
+            .segmentSeconds = static_cast<int>(json::integer(entry, "/targetDurationSec")),
         });
     }
 }
@@ -477,7 +478,7 @@ Result<Player> player(Element root) {
             .durationSeconds = json::integer(details, "/lengthSeconds"),
             .viewCount = json::integer(details, "/viewCount"),
             .description = std::string(json::string(details, "/shortDescription")),
-            .live = json::boolean(details, "/isLiveContent"),
+            .live = json::boolean(details, "/isLive"),
         };
     }
 

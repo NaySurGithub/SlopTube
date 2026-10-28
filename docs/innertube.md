@@ -186,5 +186,5 @@ uses the largest.
 
 ## Streams
 
-See [media.md](media.md). Only formats with a direct `url` are used; ciphered or SABR-only
+See [media.md](media.md), and [Live streams](media.md#live-streams) for broadcasts in progress. Only formats with a direct `url` are used; ciphered or SABR-only
 formats are skipped.

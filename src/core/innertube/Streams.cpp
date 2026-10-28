@@ -44,8 +44,9 @@ int codecRank(const Format& format, const CodecRanks& codecs) {
     return kUnsupported;
 }
 
+// Files must have a known size; live segments have none.
 bool fetchable(const Format& format) {
-    return !format.url.empty() && format.contentLength > 0;
+    return !format.url.empty() && (format.contentLength > 0 || format.segmented());
 }
 
 // The server's label ("1080p60", or "480p" for a 1080x608 frame); synthesised when absent.

@@ -35,25 +35,34 @@ private:
     std::atomic<int> m_waitingReads = 0;
 };
 
+// A download feeding a demuxer, cancelled when the session it belongs to stops.
+class Source {
+public:
+    virtual ~Source() = default;
+
+    // Unblocks pending reads; subsequent reads fail.
+    virtual void cancel() = 0;
+
+    // Reads ahead only the minimum while `brief`, as for a video that is not playing yet.
+    virtual void setBriefReadAhead(bool brief) = 0;
+};
+
 // Random-access view of a remote file for AMediaExtractor. Data is fetched in fixed-size blocks
 // through ranged requests, with a background thread reading ahead of the playback position.
-class HttpSource {
+class HttpSource : public Source {
 public:
     // `size` and `bitrate` may be 0 when unknown; the bitrate sizes the read-ahead window.
     HttpSource(const http::Client& http, std::string url, std::int64_t size, std::int64_t bitrate,
                NetworkStats& stats);
-    ~HttpSource();
+    ~HttpSource() override;
 
     HttpSource(const HttpSource&) = delete;
     HttpSource& operator=(const HttpSource&) = delete;
 
     [[nodiscard]] AMediaDataSource* dataSource() const { return m_dataSource; }
 
-    // Unblocks pending reads; subsequent reads fail.
-    void cancel();
-
-    // Reads ahead only the minimum while `brief`, as for a video that is not playing yet.
-    void setBriefReadAhead(bool brief);
+    void cancel() override;
+    void setBriefReadAhead(bool brief) override;
 
 private:
     using Block = std::string; // Response bodies are moved in without copying.

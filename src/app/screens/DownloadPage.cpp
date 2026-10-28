@@ -64,7 +64,7 @@ void App::openDownload(const innertube::Item& item) {
                 return;
             }
             m_downloadSheet.loading = false;
-            if (player) {
+            if (player && !player->details.live) {
                 m_downloadSheet.streams = innertube::selectStreams(*player);
                 m_downloadSheet.player = std::move(*player);
             }

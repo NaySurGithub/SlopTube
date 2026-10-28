@@ -38,7 +38,7 @@ docs/                   This documentation
 | Main (`android_main`) | Input, UI state, drawing, GL. Owns every UI object. |
 | Workers (`TaskQueue`, 4) | Network requests, JSON parsing, image decoding |
 | Player | Demuxing and decoding (`media::Player`) |
-| HTTP prefetch | Read-ahead for the media data source |
+| HTTP prefetch | Read-ahead for the media data source, or the segment fetcher of a live stream |
 | Downloads | One video download at a time (`Downloads`) |
 | AAudio callback | Pulls decoded PCM from a lock-free ring |
 

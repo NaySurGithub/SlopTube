@@ -20,7 +20,9 @@ Every other client tried has been dropped:
 - SABR (`serverAbrStreamingUrl`) stops at the same point and then asks for a sign-in.
 - The OAuth token is refused by every player client except TV, which serves no direct URLs.
 
-Only formats with a direct `url` are used; ciphered formats are skipped.
+Only formats with a direct `url` are used; ciphered formats are skipped. A broadcast in progress
+(`videoDetails.isLive`) gets the same kind of URLs from VISIONOS, for segments rather than files
+(see [Live streams](#live-streams)); ANDROID gives none for it.
 
 ## Choosing streams (`core/innertube/Streams.*`)
 
@@ -39,6 +41,7 @@ Only formats with a direct `url` are used; ciphered formats are skipped.
 | `HttpSource` | Ranged HTTP reads in 1 MB blocks with about 30 s of read-ahead (2–16 blocks); feeds the extractor through `AMediaDataSource`; measures bandwidth (shared across videos) |
 | `Player` | Separate video and audio sources and decoders. Audio is the clock and video frames are released against it. Seeks apply to both. Each opened video is a `Session` (streams, state, decoder threads, its own `AImageReader`); a second, standby session can be preloaded |
 | `VideoSurface` | `AImageReader` → `EGLImage` → `GL_TEXTURE_EXTERNAL_OES`, drawn by ImGui like any image (zero copy). Letterboxes the frame, optionally zoomed and cropped to the box (texture coordinates are cropped, nothing is drawn outside the box) |
+| `LiveSource` | The segments of a live stream, fetched in order a few ahead of the one being demuxed (see [Live streams](#live-streams)) |
 | `Log.hpp` | The single logcat tag |
 
 ### Quality
@@ -157,6 +160,34 @@ playback where it was. The Shorts bar has it too; its seeks are live, so it seek
 split at them with 2 dp gaps (3 dp while seeking), the time row ends with the current chapter's
 title, and the phone ticks each time a seek crosses into another chapter.
 
+### Live streams
+
+A live format has no `contentLength` but a `targetDurationSec` (`Format::segmentSeconds`, 5 s):
+its URL with `&sq=<n>` returns segment *n*, and without it the newest one. Every segment is a
+complete fragmented MP4 file (`ftyp`, `moov`, then `emsg`, `moof`, `mdat`) whose sample times
+continue the stream's timeline, and whose `emsg` text carries `Sequence-Number: <n>`. Measured:
+
+| Request | Answer |
+| --- | --- |
+| No `sq` | The edge segment, at once |
+| `sq` behind the edge | The segment, at once (the stream keeps `maxDvrDurationSec`, 12 h) |
+| `sq` = edge + 1 | Held until the segment exists (up to 5 s), then sent |
+| `sq` further ahead | 204 No Content after a few seconds |
+
+`LiveSource` reads the edge's number, starts 3 segments behind it (about 15 s, so the next one is
+always out before it is needed) and keeps 3 segments downloaded ahead. The player demuxes each
+one with its own `AMediaExtractor` over the bytes in memory (`SegmentFile`), and moves the same
+decoders on to the next segment when one is used up (`Input::advance`), so playback runs across
+segments without a gap. Audio and video start at the same segment. A quality switch opens the
+new video stream at the segment audio is playing, and the usual switch takes over from there.
+The broadcast is over when segments stop coming (10 misses, 2 s apart), and playback ends.
+
+The watch page shows a red dot and "LIVE" instead of the time, with no progress bar. Seeking,
+2x and downloading are not offered.
+
+Closing a stream does not wait for a held request: `http::Request::cancelled` makes libcurl give
+up within about a second.
+
 ### Haptics
 
 `Platform::haptic` makes each vibration with the standard Android APIs:
@@ -201,7 +232,9 @@ sizes. `Downloads` then saves the video under `<data>/downloads/<video id>/`:
 ## Known limitations
 
 - VISIONOS is undocumented and could be closed at any time. Without it, playback falls back to
-  360p.
+  360p, and live streams do not play at all.
+- Live streams play about 15 s behind the edge and cannot be rewound, although the server keeps
+  12 h of them. Upcoming streams and premieres show the server's reason instead.
 - Auto picks a quality when a video opens and when Auto is re-selected. It does not adapt in the
   middle of a video.
 - Qualities above 1080p (VP9/AV1 only) are not offered.

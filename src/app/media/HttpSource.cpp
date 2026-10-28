@@ -178,7 +178,7 @@ bool HttpSource::fetch(std::int64_t index, Block& out) const {
 
     for (int attempt = 0; attempt < kFetchAttempts && !m_cancelled; ++attempt) {
         const auto start = std::chrono::steady_clock::now();
-        auto response = m_http.send({.url = url});
+        auto response = m_http.send({.url = url, .cancelled = &m_cancelled});
         if (response && response->ok()) {
             out = std::move(response->body);
             // Short blocks measure latency, and local files are not the network.

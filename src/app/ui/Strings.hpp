@@ -95,6 +95,7 @@ enum class Text : std::uint8_t {
     GoToChannel,
     ReleaseToCancel,
     PullUpForPrecise,
+    Live,
     Count,
 };
 

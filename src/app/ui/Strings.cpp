@@ -118,6 +118,7 @@ constexpr std::array<Translation, std::to_underlying(Text::Count)> kTranslations
     {Text::ReleaseToCancel, {"Release to cancel", "Relâchez pour annuler"}},
     {Text::PullUpForPrecise,
      {"Pull up for precise seeking", "Faites glisser vers le haut pour une recherche précise"}},
+    {Text::Live, {"LIVE", "EN DIRECT"}},
 }};
 
 // Catch a missing or misordered row at compile time rather than showing the wrong text.

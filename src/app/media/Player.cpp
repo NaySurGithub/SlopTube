@@ -1,5 +1,6 @@
 #include "app/media/Player.hpp"
 
+#include "app/media/LiveSource.hpp"
 #include "app/media/Log.hpp"
 #include "app/media/TimeStretch.hpp"
 
@@ -13,6 +14,7 @@
 #include <array>
 #include <chrono>
 #include <cstdlib>
+#include <cstring>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -202,7 +204,47 @@ struct FormatDeleter {
 };
 
 using CodecPtr = std::unique_ptr<AMediaCodec, CodecDeleter>;
+using ExtractorPtr = std::unique_ptr<AMediaExtractor, ExtractorDeleter>;
 using FormatPtr = std::unique_ptr<AMediaFormat, FormatDeleter>;
+
+// A live segment held in memory, and its demuxer.
+struct SegmentFile {
+    explicit SegmentFile(std::string bytes)
+        : data(std::move(bytes)) {
+        AMediaDataSource_setUserdata(source, this);
+        AMediaDataSource_setReadAt(
+            source, [](void* self, off64_t offset, void* buffer, size_t size) -> ssize_t {
+                const std::string& file = static_cast<SegmentFile*>(self)->data;
+                if (offset < 0 || static_cast<std::size_t>(offset) >= file.size()) {
+                    return 0;
+                }
+                const std::size_t count =
+                    std::min(size, file.size() - static_cast<std::size_t>(offset));
+                std::memcpy(buffer, file.data() + offset, count);
+                return static_cast<ssize_t>(count);
+            });
+        AMediaDataSource_setGetSize(source, [](void* self) -> ssize_t {
+            return static_cast<ssize_t>(static_cast<SegmentFile*>(self)->data.size());
+        });
+        AMediaDataSource_setClose(source, [](void*) {});
+    }
+
+    ~SegmentFile() {
+        extractor.reset(); // Stops using the source before it goes.
+        AMediaDataSource_delete(source);
+    }
+
+    SegmentFile(const SegmentFile&) = delete;
+    SegmentFile& operator=(const SegmentFile&) = delete;
+
+    [[nodiscard]] bool open() const {
+        return AMediaExtractor_setDataSourceCustom(extractor.get(), source) == AMEDIA_OK;
+    }
+
+    std::string data;
+    AMediaDataSource* source = AMediaDataSource_new();
+    ExtractorPtr extractor{AMediaExtractor_new()};
+};
 
 // A decoded buffer waiting to be consumed.
 struct Pending {
@@ -341,20 +383,38 @@ std::int64_t trackDuration(AMediaExtractor* extractor, std::int32_t track) {
 
 } // namespace
 
-// A remote file and its demuxer.
+// A remote file, or the segments of a live stream, and its demuxer.
 struct Player::Input {
     Input(Session& owner, std::unique_ptr<HttpSource> data);
+    Input(Session& owner, std::unique_ptr<LiveSource> data);
     ~Input();
 
     Input(const Input&) = delete;
     Input& operator=(const Input&) = delete;
 
-    // Parses the container; blocks on the network.
+    // Parses the container (a live stream's first segment); blocks on the network.
     bool open();
+
+    // Live: moves on to the next segment, where the tracks of `tracks` demuxed from the current
+    // one stay selected. False while that segment has not arrived.
+    bool advance(std::span<Track* const> tracks, bool wait = false);
+
+    [[nodiscard]] AMediaExtractor* demuxer() const {
+        return segment ? segment->extractor.get() : extractor.get();
+    }
+
+    // Live: every sample of the current segment has been read.
+    [[nodiscard]] bool exhausted() const {
+        return live && AMediaExtractor_getSampleTrackIndex(demuxer()) < 0;
+    }
 
     Session& session;
     std::unique_ptr<HttpSource> source;
-    std::unique_ptr<AMediaExtractor, ExtractorDeleter> extractor{AMediaExtractor_new()};
+    std::unique_ptr<LiveSource> live;
+    ExtractorPtr extractor{AMediaExtractor_new()}; // Of `source`.
+    std::unique_ptr<SegmentFile> segment;          // Live: the segment being demuxed.
+    std::int64_t sequence = -1;                    // Live: number of `segment`.
+    std::int64_t startUs = -1;                     // Live: first sample time of `segment`.
 };
 
 struct Player::Session {
@@ -379,7 +439,7 @@ struct Player::Session {
     Session(const Session&) = delete;
     Session& operator=(const Session&) = delete;
 
-    void track(HttpSource* source) {
+    void track(Source* source) {
         const std::scoped_lock lock(sourcesMutex);
         if (stopping) {
             source->cancel();
@@ -392,12 +452,12 @@ struct Player::Session {
     void setStandby(bool value) {
         const std::scoped_lock lock(sourcesMutex);
         standby = value;
-        for (HttpSource* source : sources) {
+        for (Source* source : sources) {
             source->setBriefReadAhead(value);
         }
     }
 
-    void untrack(HttpSource* source) {
+    void untrack(Source* source) {
         const std::scoped_lock lock(sourcesMutex);
         std::erase(sources, source);
     }
@@ -406,7 +466,7 @@ struct Player::Session {
         {
             const std::scoped_lock lock(sourcesMutex);
             stopping = true;
-            for (HttpSource* source : sources) {
+            for (Source* source : sources) {
                 source->cancel();
             }
         }
@@ -438,10 +498,13 @@ struct Player::Session {
     std::atomic<std::size_t> target;             // Quality selected most recently.
     std::atomic<std::size_t> playing;            // Quality of the video stream being decoded.
     std::atomic<bool> stopRequested = false;
+    // Live: the segment audio is demuxed from and its start, where a quality switch begins.
+    std::atomic<std::int64_t> liveSequence = -1;
+    std::atomic<std::int64_t> liveSegmentUs = -1;
 
     std::mutex sourcesMutex;
-    std::vector<HttpSource*> sources; // Every live source, cancelled on stop.
-    bool standby = false;             // Under sourcesMutex.
+    std::vector<Source*> sources; // Every open source, cancelled on stop.
+    bool standby = false;         // Under sourcesMutex.
     bool stopping = false;
 
     // Quality switches travel UI thread -> loader thread (opens the new stream) -> decoder.
@@ -463,13 +526,48 @@ Player::Input::Input(Session& owner, std::unique_ptr<HttpSource> data)
     session.track(source.get());
 }
 
+Player::Input::Input(Session& owner, std::unique_ptr<LiveSource> data)
+    : session(owner)
+    , live(std::move(data)) {
+    session.track(live.get());
+}
+
 Player::Input::~Input() {
     extractor.reset(); // Stops using the source before it goes.
-    session.untrack(source.get());
+    segment.reset();
+    session.untrack(source ? static_cast<Source*>(source.get()) : live.get());
 }
 
 bool Player::Input::open() {
+    if (live) {
+        return advance({}, true) && segment;
+    }
     return AMediaExtractor_setDataSourceCustom(extractor.get(), source->dataSource()) == AMEDIA_OK;
+}
+
+bool Player::Input::advance(std::span<Track* const> tracks, bool wait) {
+    auto next = live->take(wait);
+    if (!next) {
+        return false;
+    }
+    auto file = std::make_unique<SegmentFile>(std::move(next->data));
+    if (!file->open()) {
+        __android_log_print(ANDROID_LOG_WARN, kLogTag, "live: cannot demux segment %lld",
+                            static_cast<long long>(next->sequence));
+        return true; // Skipped; the next one follows.
+    }
+    AMediaExtractor* previous = demuxer();
+    for (Track* track : tracks) {
+        if (track->extractor == previous && track->active()) {
+            AMediaExtractor_selectTrack(file->extractor.get(),
+                                        static_cast<std::size_t>(track->index));
+            track->extractor = file->extractor.get();
+        }
+    }
+    segment = std::move(file);
+    sequence = next->sequence;
+    startUs = AMediaExtractor_getSampleTime(segment->extractor.get());
+    return true;
 }
 
 Player::Player(const http::Client& http, std::function<void()> onFrame)
@@ -574,8 +672,8 @@ void Player::setSpeed(float speed) {
 }
 
 void Player::seek(std::int64_t positionUs) {
-    if (!m_session) {
-        return;
+    if (!m_session || m_session->info.details.live) {
+        return; // Live streams play at the edge.
     }
     const std::int64_t target = std::clamp<std::int64_t>(positionUs, 0, m_session->durationUs);
     m_session->seekRequestUs = target;
@@ -658,11 +756,19 @@ std::int64_t Player::positionUs() const {
     return m_session->clockUs();
 }
 
-std::unique_ptr<Player::Input> Player::openInput(const innertube::Format& format,
-                                                 Session& session) {
-    auto input = std::make_unique<Input>(
-        session, std::make_unique<HttpSource>(m_http, format.url, format.contentLength,
-                                              format.bitrate, m_network));
+bool Player::live() const {
+    return m_session && m_session->info.details.live;
+}
+
+std::unique_ptr<Player::Input> Player::openInput(const innertube::Format& format, Session& session,
+                                                 std::int64_t firstSegment) {
+    auto input =
+        format.segmented()
+            ? std::make_unique<Input>(
+                  session, std::make_unique<LiveSource>(m_http, format.url, firstSegment))
+            : std::make_unique<Input>(
+                  session, std::make_unique<HttpSource>(m_http, format.url, format.contentLength,
+                                                        format.bitrate, m_network));
     if (!input->open()) {
         __android_log_print(ANDROID_LOG_ERROR, kLogTag, "cannot demux itag %d", format.itag);
         return nullptr;
@@ -693,9 +799,17 @@ void Player::loaderLoop(Session& session) {
         const innertube::Format& format =
             session.info.formats[session.streams.qualities[*quality].video];
         const std::int64_t positionUs = session.clockUs();
-        auto input = openInput(format, session);
+        std::int64_t firstSegment = -1;
+        if (format.segmented()) {
+            // The segment holding the position: the audio's, or the one before when the audio
+            // has already moved past the position.
+            const std::int64_t sequence = session.liveSequence;
+            firstSegment =
+                sequence >= 0 && positionUs < session.liveSegmentUs ? sequence - 1 : sequence;
+        }
+        auto input = openInput(format, session, firstSegment);
         const auto track =
-            input ? findTrack(input->extractor.get(), "video/") : std::optional<std::int32_t>{};
+            input ? findTrack(input->demuxer(), "video/") : std::optional<std::int32_t>{};
         if (!track) {
             const std::scoped_lock lock(session.switchMutex);
             if (!session.requested) {
@@ -703,9 +817,11 @@ void Player::loaderLoop(Session& session) {
             }
             continue;
         }
-        AMediaExtractor* extractor = input->extractor.get();
+        AMediaExtractor* extractor = input->demuxer();
         AMediaExtractor_selectTrack(extractor, static_cast<std::size_t>(*track));
-        AMediaExtractor_seekTo(extractor, positionUs, AMEDIAEXTRACTOR_SEEK_PREVIOUS_SYNC);
+        if (!format.segmented()) {
+            AMediaExtractor_seekTo(extractor, positionUs, AMEDIAEXTRACTOR_SEEK_PREVIOUS_SYNC);
+        }
         (void)AMediaExtractor_getSampleTime(extractor); // Loads the first fragment here.
 
         const std::scoped_lock lock(session.switchMutex);
@@ -732,21 +848,21 @@ void Player::decodeLoop(Session& session) {
         const innertube::Format& audioFormat = session.info.formats[*session.streams.audio];
         __android_log_print(ANDROID_LOG_INFO, kLogTag, "audio itag %d %s", audioFormat.itag,
                             audioFormat.mimeType.c_str());
-        audioInput = openInput(audioFormat, session);
+        // A live audio stream starts at the video's segment, so both cover the same time.
+        audioInput = openInput(audioFormat, session, main->live ? main->sequence : -1);
     }
     if (!main || (session.streams.audio && !audioInput)) {
         session.state = session.stopRequested ? PlayerState::Idle : PlayerState::Failed;
         return;
     }
-    AMediaExtractor* audioExtractor =
-        audioInput ? audioInput->extractor.get() : main->extractor.get();
+    AMediaExtractor* audioExtractor = audioInput ? audioInput->demuxer() : main->demuxer();
 
     Track video;
     Track audio;
     std::int64_t duration = 0;
-    if (const auto track = findTrack(main->extractor.get(), "video/")) {
-        const FormatPtr format(AMediaExtractor_getTrackFormat(main->extractor.get(),
-                                                              static_cast<std::size_t>(*track)));
+    if (const auto track = findTrack(main->demuxer(), "video/")) {
+        const FormatPtr format(
+            AMediaExtractor_getTrackFormat(main->demuxer(), static_cast<std::size_t>(*track)));
         AImageReader* reader = nullptr;
         AImageReader_newWithUsage(formatInt(format.get(), AMEDIAFORMAT_KEY_WIDTH),
                                   formatInt(format.get(), AMEDIAFORMAT_KEY_HEIGHT),
@@ -762,8 +878,8 @@ void Player::decodeLoop(Session& session) {
             session.reader = reader;
             ANativeWindow* window = nullptr;
             AImageReader_getWindow(reader, &window);
-            startDecoder(video, main->extractor.get(), *track, window);
-            duration = trackDuration(main->extractor.get(), *track);
+            startDecoder(video, main->demuxer(), *track, window);
+            duration = trackDuration(main->demuxer(), *track);
         }
     }
     if (const auto track = findTrack(audioExtractor, "audio/");
@@ -773,16 +889,37 @@ void Player::decodeLoop(Session& session) {
         session.audio.open(formatInt(format.get(), AMEDIAFORMAT_KEY_SAMPLE_RATE),
                            formatInt(format.get(), AMEDIAFORMAT_KEY_CHANNEL_COUNT));
         duration = std::max(duration, trackDuration(audioExtractor, *track));
+        if (audioInput && audioInput->live) {
+            session.liveSegmentUs = AMediaExtractor_getSampleTime(audioExtractor);
+            session.liveSequence = audioInput->sequence;
+        }
     }
     if (!audio.active()) {
         session.state = PlayerState::Failed; // Audio is the clock.
         return;
     }
-    if (duration > 0) {
+    if (duration > 0 && !session.info.details.live) {
         session.durationUs = duration;
     }
 
     const std::array<Track*, 2> tracks{&video, &audio};
+    // Moves one sample of `input` to its decoder. A live input first moves on to its next
+    // segment once the current one is used up, and ends only with the broadcast.
+    const auto pump = [&](Input& input) {
+        if (input.exhausted()) {
+            if (input.advance(tracks)) {
+                if (&input == audioInput.get()) {
+                    session.liveSegmentUs = input.startUs;
+                    session.liveSequence = input.sequence;
+                }
+                return true;
+            }
+            if (!input.live->ended()) {
+                return false; // The next segment is still downloading.
+            }
+        }
+        return feed(input.demuxer(), tracks);
+    };
     std::int64_t audioDiscardUs = 0;
     std::int64_t videoDiscardUs = 0;
     bool firstFrameShown = false;
@@ -791,10 +928,10 @@ void Player::decodeLoop(Session& session) {
         bool progressed = false;
 
         if (const std::int64_t target = session.seekRequestUs.exchange(-1); target >= 0) {
-            AMediaExtractor_seekTo(main->extractor.get(), target,
-                                   AMEDIAEXTRACTOR_SEEK_PREVIOUS_SYNC);
+            AMediaExtractor_seekTo(main->demuxer(), target, AMEDIAEXTRACTOR_SEEK_PREVIOUS_SYNC);
             if (audioInput) {
-                AMediaExtractor_seekTo(audioExtractor, target, AMEDIAEXTRACTOR_SEEK_PREVIOUS_SYNC);
+                AMediaExtractor_seekTo(audioInput->demuxer(), target,
+                                       AMEDIAEXTRACTOR_SEEK_PREVIOUS_SYNC);
             }
             for (Track* track : tracks) {
                 if (track->active()) {
@@ -825,7 +962,7 @@ void Player::decodeLoop(Session& session) {
             }
         }
         if (prepared && video.active()) {
-            AMediaExtractor* extractor = prepared->extractor.get();
+            AMediaExtractor* extractor = prepared->demuxer();
             const auto track = findTrack(extractor, "video/");
             ANativeWindow* window = nullptr;
             AImageReader_getWindow(session.reader, &window);
@@ -851,9 +988,9 @@ void Player::decodeLoop(Session& session) {
                                     static_cast<long long>(nowUs / 1000));
             } else {
                 // Keep the old stream: reopen its decoder where it was.
-                const auto oldTrack = findTrack(main->extractor.get(), "video/");
-                if (oldTrack && startDecoder(video, main->extractor.get(), *oldTrack, window)) {
-                    AMediaExtractor_seekTo(main->extractor.get(), session.clockUs(),
+                const auto oldTrack = findTrack(main->demuxer(), "video/");
+                if (oldTrack && startDecoder(video, main->demuxer(), *oldTrack, window)) {
+                    AMediaExtractor_seekTo(main->demuxer(), session.clockUs(),
                                            AMEDIAEXTRACTOR_SEEK_PREVIOUS_SYNC);
                 }
                 const std::scoped_lock lock(session.switchMutex);
@@ -870,10 +1007,10 @@ void Player::decodeLoop(Session& session) {
 
         // Feed compressed samples to the decoders.
         if (main) {
-            progressed |= feed(main->extractor.get(), tracks);
+            progressed |= pump(*main);
         }
         if (audioInput) {
-            progressed |= feed(audioExtractor, tracks);
+            progressed |= pump(*audioInput);
         }
 
         // Move decoded PCM into the output ring.

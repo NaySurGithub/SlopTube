@@ -44,6 +44,7 @@ without a copy.
 - **Player** - hardware decoding up to 1080p60, quality choice, 2x speed while holding, seek
   previews, chapters, precise seeking, seek undo, fullscreen with pinch to zoom, mini player, and
   the official app's haptic feedback
+- **Live** - broadcasts in progress, at every quality, about 15 s behind the edge
 - **Shorts** - vertical pager with the next short preloaded, so swiping is instant, and double
   tap to like
 - **Subtitles** - every track, with machine translation
