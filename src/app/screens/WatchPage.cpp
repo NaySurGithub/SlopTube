@@ -193,9 +193,11 @@ float App::drawWatchHeader(Frame& frame, ImVec2 origin, float width) {
             downloadLabel = std::vformat(tr(Text::Percent), std::make_format_args(percent));
             frame.animating = true;
         }
-        if (chip(download && download->state == DownloadState::Done ? Icon::Downloaded
-                                                                    : Icon::Download,
-                 downloadLabel)) {
+        // A broadcast has no end to download up to.
+        const bool live = m_watch.details && m_watch.details->live;
+        if (!live && chip(download && download->state == DownloadState::Done ? Icon::Downloaded
+                                                                             : Icon::Download,
+                          downloadLabel)) {
             later([this] { openDownload(m_watch.item); });
         }
         if (chip(Icon::Save, tr(Text::Save))) {

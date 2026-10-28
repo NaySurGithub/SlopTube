@@ -58,6 +58,9 @@ constexpr float kChapterTitleGap = 8; // dp between the chapter title and the ti
 constexpr float kChapterGap = 2;        // dp
 constexpr float kSeekingChapterGap = 3; // dp
 constexpr std::string_view kChapterSeparator = " • ";
+// A broadcast's time row: a red dot before "LIVE".
+constexpr float kLiveDot = 8;    // dp
+constexpr float kLiveDotGap = 6; // dp
 // Precise seeking, as in the official app: pulling 45 dp up from where a seek along
 // the bar began opens a film strip of square 72 dp frames under a 3 dp line, pulling as far down
 // closes it. Above the strip: the time, then a 56 dp play button.
@@ -1458,19 +1461,28 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
                               theme::kAccent);
     }
     if (m_watch.controlsVisible && !hideControls) {
-        std::string time =
-            formatDuration(playedMs / 1000) + " / " + formatDuration(durationMs / 1000);
-        if (!chapters.empty()) {
-            time += kChapterSeparator;
-            time += chapters[chapterAt(playedMs)].title;
-        }
         // Controls stay clear of a display cutout beside a fullscreen video.
         const float left = min.x + (m_fullscreen ? m_insets.left : 0);
         const float right = max.x - (m_fullscreen ? m_insets.right : 0);
+        float timeX = left + c.dp(theme::kGutter);
+        std::string time;
+        if (m_player.live()) {
+            // A broadcast has no position to show: a red dot and "LIVE", as the official app.
+            const float timeY = barY - c.dp(24) + c.lineHeight(theme::kCaptionSize) * 0.5f;
+            list->AddCircleFilled({timeX + c.dp(kLiveDot) * 0.5f, timeY}, c.dp(kLiveDot) * 0.5f,
+                                  theme::kAccent);
+            timeX += c.dp(kLiveDot + kLiveDotGap);
+            time = tr(Text::Live);
+        } else {
+            time = formatDuration(playedMs / 1000) + " / " + formatDuration(durationMs / 1000);
+            if (!chapters.empty()) {
+                time += kChapterSeparator;
+                time += chapters[chapterAt(playedMs)].title;
+            }
+        }
         // The chapter title runs up to the fullscreen button.
-        c.line({left + c.dp(theme::kGutter), barY - c.dp(24)},
-               right - c.dp(kButtonInset * 2) - left - c.dp(theme::kGutter), theme::kCaptionSize,
-               theme::kTextPrimary, time);
+        c.line({timeX, barY - c.dp(24)}, right - c.dp(kButtonInset * 2) - timeX,
+               theme::kCaptionSize, theme::kTextPrimary, time);
 
         if (iconButton(frame, Icon::Settings,
                        {right - c.dp(kButtonInset), min.y + c.dp(kButtonInset)},
@@ -1514,7 +1526,9 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
 bool App::holdForSpeed(Frame& frame, ImVec2 min, ImVec2 max, float pillTop) {
     // A drag (scrubbing, pulling the video down) is not a hold: pressed() ends past the slop.
     const bool pressing = m_touch.pressed(min, max);
-    if (!m_speedHeld && pressing && m_player.state() == media::PlayerState::Playing) {
+    // A broadcast plays at the edge: 2x would run out of stream within seconds.
+    if (!m_speedHeld && pressing && m_player.state() == media::PlayerState::Playing &&
+        !m_player.live()) {
         if (m_touch.pressDuration() >= kHoldSeconds) {
             m_speedHeld = true;
             m_player.setSpeed(kHeldSpeed);

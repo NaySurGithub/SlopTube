@@ -222,8 +222,8 @@ void Downloads::saveManifest(const Job& job) const {
 void Downloads::start(const innertube::Item& item, const innertube::Player& player,
                       std::size_t quality) {
     const innertube::Streams streams = innertube::selectStreams(player);
-    if (quality >= streams.qualities.size()) {
-        return;
+    if (quality >= streams.qualities.size() || player.details.live) {
+        return; // A broadcast has no end to download up to.
     }
     if (const auto existing = find(item.id)) {
         if (existing->state == DownloadState::Downloading) {

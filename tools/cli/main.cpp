@@ -10,6 +10,7 @@
 #include <array>
 #include <cstdlib>
 #include <filesystem>
+#include <format>
 #include <print>
 #include <span>
 #include <string_view>
@@ -112,16 +113,25 @@ int login(auth::Session& session) {
 }
 
 int player(innertube::Api& api, std::string_view videoId) {
+    // VISIONOS answers only a client the server already knows (visitorData), as the app is once
+    // it has loaded a feed.
+    std::ignore = api.search(videoId);
     auto info = api.player(videoId);
     if (!info) {
         std::println(stderr, "error: {}", info.error().message);
         return EXIT_FAILURE;
     }
-    std::println("{} — {} ({} s)", info->details.title, info->details.channel,
-                 info->details.durationSeconds);
+    if (info->details.live) {
+        std::println("{} — {} (live)", info->details.title, info->details.channel);
+    } else {
+        std::println("{} — {} ({} s)", info->details.title, info->details.channel,
+                     info->details.durationSeconds);
+    }
     for (const auto& format : info->formats) {
-        std::println("  itag {:3} {:>4}p{:<2} {:>8} kbps  {}", format.itag, format.height,
-                     format.fps, format.bitrate / 1000, format.mimeType);
+        std::println("  itag {:3} {:>4}p{:<2} {:>8} kbps  {}{}", format.itag, format.height,
+                     format.fps, format.bitrate / 1000, format.mimeType,
+                     format.segmented() ? std::format("  ({} s segments)", format.segmentSeconds)
+                                        : std::string());
     }
     if (auto storyboard = api.storyboard(videoId)) {
         info->storyboard = std::move(*storyboard);

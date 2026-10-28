@@ -31,6 +31,10 @@ std::size_t appendBody(char* data, std::size_t size, std::size_t count, void* us
     return size * count;
 }
 
+int abortIfCancelled(void* cancelled, curl_off_t, curl_off_t, curl_off_t, curl_off_t) {
+    return static_cast<const std::atomic<bool>*>(cancelled)->load() ? 1 : 0;
+}
+
 // Serves a "file://" URL from disk, honouring its range parameter.
 Result<Response> readFile(std::string_view url) {
     url.remove_prefix(kFileScheme.size());
@@ -135,6 +139,12 @@ Result<Response> Client::send(const Request& request) const {
                      request.retryOnStall ? kStallSeconds : kLowSpeedTimeSeconds);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &appendBody);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response.body);
+    if (request.cancelled != nullptr) {
+        // libcurl calls this about once a second even while nothing arrives.
+        curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, &abortIfCancelled);
+        curl_easy_setopt(curl, CURLOPT_XFERINFODATA, request.cancelled);
+        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+    }
     if (!m_shared->options.caPath.empty()) {
         curl_easy_setopt(curl, CURLOPT_CAPATH, m_shared->options.caPath.c_str());
     }

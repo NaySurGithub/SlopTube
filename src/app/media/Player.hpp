@@ -32,9 +32,10 @@ enum class PlayerState : std::uint8_t {
     Failed,
 };
 
-// Hardware-decoded playback of either adaptive streams (separate video and audio files) or a
-// progressive one (muxed). Video frames are delivered to an AImageReader for zero-copy GPU
-// sampling; audio drives the clock. Every method is called from the UI thread.
+// Hardware-decoded playback of either adaptive streams (separate video and audio files, or the
+// segments of a live stream) or a progressive one (muxed). Video frames are delivered to an
+// AImageReader for zero-copy GPU sampling; audio drives the clock. Every method is called from the
+// UI thread.
 class Player {
 public:
     // `onFrame` runs on an arbitrary thread whenever a new video frame becomes available.
@@ -85,6 +86,9 @@ public:
 
     [[nodiscard]] std::int64_t durationUs() const;
 
+    // The open video is broadcasting now: it has no duration and cannot seek.
+    [[nodiscard]] bool live() const;
+
     [[nodiscard]] AImageReader* imageReader() const;
 
     // Details of the open video; null when none is.
@@ -102,8 +106,9 @@ private:
     static void stopSession(std::unique_ptr<Session>& session);
     void decodeLoop(Session& session);
     void loaderLoop(Session& session);
-    [[nodiscard]] std::unique_ptr<Input> openInput(const innertube::Format& format,
-                                                   Session& session);
+    // `firstSegment` is where a live stream starts; negative for near the live edge.
+    [[nodiscard]] std::unique_ptr<Input>
+    openInput(const innertube::Format& format, Session& session, std::int64_t firstSegment = -1);
 
     const http::Client& m_http;
     std::function<void()> m_onFrame;

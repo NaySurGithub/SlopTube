@@ -2,6 +2,7 @@
 
 #include "core/util/Result.hpp"
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -35,6 +36,8 @@ struct Request {
     // Safe to send twice (a read). When the server stays silent for kStallSeconds the request is
     // sent again once on a fresh connection, instead of waiting out a stalled one.
     bool retryOnStall = false;
+    // The transfer is abandoned, within about a second, once this becomes true.
+    const std::atomic<bool>* cancelled = nullptr;
 };
 
 // A request that receives nothing for this long has stalled: on the phone's Wi-Fi, a connection

@@ -84,8 +84,12 @@ struct Format {
     std::string qualityLabel; // Server-side name such as "720p60"; empty for audio.
     bool drc = false;         // Audio with dynamic range compression applied.
     bool defaultAudio = true; // Original language among dubbed audio tracks.
+    // Live streams: media time of one segment, fetched with "&sq=<number>"; 0 for files.
+    int segmentSeconds = 0;
 
     [[nodiscard]] bool hasVideo() const { return width > 0; }
+
+    [[nodiscard]] bool segmented() const { return segmentSeconds > 0; }
 
     [[nodiscard]] bool hasAudio() const {
         return mimeType.starts_with("audio/") || mimeType.find("mp4a") != std::string::npos;
@@ -100,7 +104,7 @@ struct VideoDetails {
     std::int64_t durationSeconds = 0;
     std::int64_t viewCount = 0;
     std::string description;
-    bool live = false;
+    bool live = false; // Broadcasting now: no duration, streams are segments of the live edge.
 };
 
 // Seek previews: sprite sheets of frames sampled through the video, at several sizes.
