@@ -7,5 +7,8 @@ namespace sloptube::build {
 inline constexpr std::string_view kAppName = "@SLOPTUBE_APP_NAME@";
 inline constexpr std::string_view kAppId = "@SLOPTUBE_APP_ID@";
 inline constexpr std::string_view kVersion = "@PROJECT_VERSION@";
+inline constexpr std::string_view kRepository = "@SLOPTUBE_REPOSITORY@"; // owner/name on GitHub.
+// A release build: it checks for newer releases and installs them (SLOPTUBE_UPDATES).
+inline constexpr bool kChecksForUpdates = @SLOPTUBE_UPDATES_VALUE@;
 
 } // namespace sloptube::build

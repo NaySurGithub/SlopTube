@@ -47,6 +47,10 @@ void JNICALL pictureInPicture(JNIEnv*, jclass, jboolean active) {
     dispatch({.kind = BridgeEvent::Kind::PictureInPicture, .active = active == JNI_TRUE});
 }
 
+void JNICALL updateFailed(JNIEnv* env, jclass, jstring reason) {
+    dispatch({.kind = BridgeEvent::Kind::UpdateFailed, .reason = nativeString(env, reason)});
+}
+
 void JNICALL pictureInPictureDismissed(JNIEnv*, jclass) {
     dispatch({.kind = BridgeEvent::Kind::PictureInPictureDismissed});
 }
@@ -204,6 +208,8 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void*) {
                         reinterpret_cast<void*>(&pictureInPicture)},
         JNINativeMethod{"nativePictureInPictureDismissed", "()V",
                         reinterpret_cast<void*>(&pictureInPictureDismissed)},
+        JNINativeMethod{"nativeUpdateFailed", "(Ljava/lang/String;)V",
+                        reinterpret_cast<void*>(&updateFailed)},
     };
     const std::array service{
         JNINativeMethod{"nativeMediaCommand", "(IJ)V", reinterpret_cast<void*>(&mediaCommand)},

@@ -17,6 +17,7 @@ target_link_libraries(sloptube PRIVATE
     sloptube::core
     sloptube::options
     imgui
+    mbedcrypto # SHA-256 of downloaded updates (mbedTLS is built for curl anyway).
     native_app_glue
     aaudio
     android

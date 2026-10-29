@@ -43,8 +43,9 @@ void App::drawSettings(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
     }};
     const float gutter = c.dp(theme::kGutter);
     const float sizeBlock = row + c.dp(theme::kChipHeight) + gutter;
-    const float content = sizeBlock + row * static_cast<float>(kToggles.size() + 1) + gutter * 3 +
-                          c.lineHeight(theme::kCaptionSize);
+    const float updateRows = build::kChecksForUpdates ? 2 : 0;
+    const float content = sizeBlock + row * (static_cast<float>(kToggles.size() + 1) + updateRows) +
+                          gutter * 3 + c.lineHeight(theme::kCaptionSize);
     screen.feed->scroller.update(frame.touch, contentMin, max, content, frame.seconds, c.dp(1));
     frame.animating |= screen.feed->scroller.moving();
 
@@ -78,6 +79,26 @@ void App::drawSettings(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
             !screen.feed->scroller.moving()) {
             value = !value;
             later([this] { applySettings(); });
+        }
+        y += row;
+    }
+
+    // Updates of the app, for builds that can install them (release builds).
+    if (build::kChecksForUpdates) {
+        if (switchRow(frame, tr(Text::CheckUpdatesAutomatically), tr(Text::CheckUpdatesDetail),
+                      {min.x, y}, width, m_settings.checkUpdates) &&
+            !screen.feed->scroller.moving()) {
+            m_settings.checkUpdates = !m_settings.checkUpdates;
+            later([this] { applySettings(); });
+        }
+        y += row;
+        const std::string current =
+            std::vformat(tr(Text::CurrentVersion), std::make_format_args(build::kVersion));
+        if (switchRow(frame,
+                      tr(m_update.checking ? Text::CheckingForUpdates : Text::CheckForUpdates),
+                      current, {min.x, y}, width, std::nullopt) &&
+            !screen.feed->scroller.moving()) {
+            later([this] { checkForUpdate(true); });
         }
         y += row;
     }

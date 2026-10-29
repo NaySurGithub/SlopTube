@@ -89,7 +89,7 @@ jobs:
             exit 1
           fi
           echo "${KEYSTORE_BASE64}" | base64 --decode > "${RUNNER_TEMP}/release.keystore"
-          echo "SIGNING=-DSLOPTUBE_KEYSTORE=${RUNNER_TEMP}/release.keystore -DSLOPTUBE_KEYSTORE_PASS=env:SLOPTUBE_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "SIGNING=-DSLOPTUBE_KEYSTORE=${RUNNER_TEMP}/release.keystore -DSLOPTUBE_KEYSTORE_PASS=env:SLOPTUBE_KEYSTORE_PASSWORD -DSLOPTUBE_UPDATES=ON" >> "$GITHUB_ENV"
       - name: Configure
         run: cmake --preset android-release -DSLOPTUBE_ANDROID_NDK="$ANDROID_HOME/ndk/${NDK_VERSION}" ${SIGNING}
       - name: Build APK

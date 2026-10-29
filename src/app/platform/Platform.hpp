@@ -79,6 +79,8 @@ public:
     void setPictureInPicture(bool allowed, int width, int height);
     // Schedules or cancels the hourly check for new uploads, asking for the permission to notify.
     void setUploadNotifications(bool enabled);
+    // Hands the downloaded APK at `apk` to Android's installer, which asks the user to confirm.
+    void installUpdate(const std::filesystem::path& apk);
 
     // Colour emoji drawn by the system's text stack (android.graphics.Paint).
     [[nodiscard]] bool hasGlyph(char32_t codepoint);

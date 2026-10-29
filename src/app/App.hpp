@@ -15,6 +15,7 @@
 #include "app/ui/Touch.hpp"
 #include "app/ui/VectorIcons.hpp"
 #include "app/ui/Views.hpp"
+#include "app/updates/Updater.hpp"
 #include "app/util/TaskQueue.hpp"
 #include "core/auth/Session.hpp"
 #include "core/http/Client.hpp"
@@ -68,6 +69,7 @@ enum class Sheet : std::uint8_t {
     Save,
     Download,
     LiveChat,
+    Update, // A newer release of the app is offered.
 };
 
 // A paginated list of comments: a video's top-level comments or the replies to one.
@@ -252,7 +254,8 @@ private:
 
         // Account and save sheets cover the screen with a scrim and size to their content.
         [[nodiscard]] bool modal() const {
-            return kind == Sheet::Accounts || kind == Sheet::Save || kind == Sheet::Download;
+            return kind == Sheet::Accounts || kind == Sheet::Save || kind == Sheet::Download ||
+                   kind == Sheet::Update;
         }
     };
 
@@ -359,6 +362,13 @@ private:
 
     [[nodiscard]] std::optional<LiveTimeline> liveTimeline() const;
     void seekLive(std::int64_t timelineMs);
+
+    // Updates of the app itself (UpdatePage.cpp). `manual`: asked from Settings, so "up to date"
+    // is said too.
+    void checkForUpdate(bool manual);
+    void downloadUpdate();
+    void drawUpdateSheet(Frame& frame, ImVec2 min, ImVec2 max);
+    [[nodiscard]] float updateSheetHeight(const Canvas& canvas) const;
 
     // Channel tabs (ChannelPage.cpp).
     void selectChannelTab(ChannelPage& page, std::optional<innertube::ChannelTab> tab);
@@ -606,6 +616,19 @@ private:
     float m_speed = 1; // Playback speed chosen in the player menu, kept across videos.
 
     Settings m_settings;
+
+    struct UpdateState {
+        std::optional<Release> available;
+        bool checking = false;
+        bool offered = false; // The sheet was shown for `available` since launch.
+        bool downloading = false;
+        bool installing = false; // Handed to Android's installer.
+        std::shared_ptr<std::atomic<std::int64_t>> received =
+            std::make_shared<std::atomic<std::int64_t>>(0);
+        std::string error;
+    };
+
+    UpdateState m_update;
     bool m_onScreen = true;                        // The window exists: the app is visible.
     bool m_typing = false;                         // The keyboard is up: the caret blinks.
     bool m_pictureInPicture = false;               // Shown in a picture-in-picture window.

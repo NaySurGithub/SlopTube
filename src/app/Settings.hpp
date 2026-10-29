@@ -15,6 +15,7 @@ struct Settings {
     bool pictureInPicture = true;     // ...in a small window over other apps.
     bool autoplay = true;             // The next video plays when one ends.
     bool uploadNotifications = false; // New uploads of subscriptions are notified.
+    bool checkUpdates = true;         // Release builds look for a newer release at launch.
     // Text and buttons: 0 normal, 1 large, 2 extra large (kInterfaceScales).
     int interfaceSize = 0;
 

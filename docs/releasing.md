@@ -26,6 +26,27 @@ CI (`.github/workflows/ci.yml`) then runs as for any push, plus, for the tag:
 The version code is `MAJOR * 10000 + MINOR * 100 + PATCH`, so minor and patch stay below 100 and
 every release must be newer than the last: Android refuses to downgrade.
 
+## Updates in the app
+
+Release builds (CMake option `SLOPTUBE_UPDATES`, which CI turns on for `v*` tags only) look for a
+newer release when they open, unless turned off in Settings, where "Check for updates" also asks
+on demand. Only they do: an update installs over the app only when both are signed with the same
+key, which debug builds are not.
+
+1. **Finding it.** `app/updates/Updater.cpp` asks the GitHub API for the latest release of
+   `SLOPTUBE_REPOSITORY` and compares its tag with the build's version (`build::kVersion`).
+2. **Offering it.** A sheet shows the new version, the start of its notes, and "Update now" or
+   "Later", once the launch animation is over (once per launch).
+3. **Downloading it.** The APK comes in 512 KB ranged pieces (the progress bar), and is kept
+   only if its SHA-256 (mbedTLS) matches the `.sha256` file published with it.
+4. **Installing it.** `SlopTubeActivity.installUpdate` writes it into a `PackageInstaller`
+   session. Android asks the user to confirm (and, the first time, to allow installing from
+   SlopTube, through `REQUEST_INSTALL_PACKAGES`); the app then restarts updated. A failure or a
+   refusal comes back as `BridgeEvent::UpdateFailed`, and the sheet offers to try again. The
+   downloaded file is deleted at the next launch.
+
+So users of v0.1.0, released before the updater existed, update by hand once.
+
 ## Release key (once)
 
 ```sh

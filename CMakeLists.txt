@@ -11,6 +11,16 @@ project(SlopTube
 # Single source of truth for application identity; consumed by the manifest and BuildInfo.hpp.
 set(SLOPTUBE_APP_NAME "SlopTube")
 set(SLOPTUBE_APP_ID "studio.kanye.sloptube")
+# Where releases are published, for the app's update check (owner/name on GitHub).
+set(SLOPTUBE_REPOSITORY "NaySurGithub/SlopTube")
+# Only builds signed with the release key can install a release over themselves, so only they look
+# for one (CI turns this on for v* tags; see docs/releasing.md).
+option(SLOPTUBE_UPDATES "Check GitHub for newer releases and offer to install them" OFF)
+if(SLOPTUBE_UPDATES)
+    set(SLOPTUBE_UPDATES_VALUE true)
+else()
+    set(SLOPTUBE_UPDATES_VALUE false)
+endif()
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

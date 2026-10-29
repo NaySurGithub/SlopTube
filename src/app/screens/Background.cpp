@@ -59,6 +59,10 @@ void App::onBridgeEvent(BridgeEvent event) {
             m_watch.fine = false;
         }
         break;
+    case BridgeEvent::Kind::UpdateFailed:
+        m_update.installing = false;
+        m_update.error = tr(Text::UpdateNotInstalled);
+        break;
     case BridgeEvent::Kind::PictureInPictureDismissed:
         m_player.setPaused(true); // The window's close button.
         break;

@@ -365,6 +365,14 @@ void Platform::setUploadNotifications(bool enabled) {
                           static_cast<jboolean>(enabled));
 }
 
+void Platform::installUpdate(const std::filesystem::path& apk) {
+    const LocalFrame frame(m_env);
+    jobject activity = m_app->activity->clazz;
+    m_env->CallVoidMethod(activity,
+                          method(m_env, activity, "installUpdate", "(Ljava/lang/String;)V"),
+                          javaString(m_env, apk.string()));
+}
+
 innertube::Locale Platform::locale() const {
     std::array<char, 2> language{};
     std::array<char, 2> country{};

@@ -183,6 +183,12 @@ App::App(android_app* native)
     ImGui_ImplOpenGL3_Init("#version 300 es");
 
     applySettings();
+    // An update downloaded earlier is installed by now, or no longer wanted.
+    std::error_code removeError;
+    std::filesystem::remove(m_platform.dataDirectory() / kUpdateFile, removeError);
+    if (m_settings.checkUpdates) {
+        checkForUpdate(false);
+    }
     if (auto history = readText(m_platform.dataDirectory() / kSearchHistoryFile)) {
         for (const auto line : std::views::split(*history, '\n')) {
             if (!line.empty()) {
@@ -833,6 +839,13 @@ bool App::frame() {
     m_tasks.drainMainThread();
     updateAutoplay();
     syncPlayback();
+    // A newer release found at launch is offered once the launch animation is over, on a free
+    // screen.
+    if (m_update.available && !m_update.offered && m_splash.finished &&
+        m_sheet.kind == Sheet::None && m_onScreen && !m_pictureInPicture) {
+        m_update.offered = true;
+        openSheet(Sheet::Update);
+    }
     if (m_watch.details && m_watch.details->live && watching() && m_onScreen) {
         pollLiveChat();
     }

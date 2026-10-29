@@ -109,6 +109,9 @@ void App::drawSheet(Frame& frame, ImVec2 min, ImVec2 max) {
     case Sheet::LiveChat:
         drawLiveChat(frame, min, max);
         break;
+    case Sheet::Update:
+        drawUpdateSheet(frame, min, max);
+        break;
     case Sheet::None:
         break;
     }
@@ -123,6 +126,9 @@ float App::modalSheetHeight(const Canvas& c, float available) const {
         break;
     case Sheet::Download:
         height = downloadSheetHeight(c);
+        break;
+    case Sheet::Update:
+        height = updateSheetHeight(c);
         break;
     default:
         height = accountsSheetHeight(c);
