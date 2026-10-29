@@ -2,6 +2,7 @@
 
 #include "app/media/Log.hpp"
 #include "app/notifications/Uploads.hpp"
+#include "app/util/Guard.hpp"
 #include "core/BuildInfo.hpp"
 
 #include <android/log.h>
@@ -18,7 +19,14 @@ std::mutex g_mutex;
 std::function<void(BridgeEvent)> g_handler; // Under g_mutex.
 std::vector<BridgeEvent> g_pending;         // Under g_mutex: sent before a handler was set.
 
+void dispatchLocked(BridgeEvent event);
+
+// Exceptions must not cross back into Java, which would end the process.
 void dispatch(BridgeEvent event) {
+    guarded("bridge event", [&] { dispatchLocked(std::move(event)); });
+}
+
+void dispatchLocked(BridgeEvent event) {
     // Under the lock, so setBridgeHandler(nullptr) waits for a delivery in flight: the handler
     // only posts to the main thread, and never comes back here.
     const std::scoped_lock lock(g_mutex);
@@ -62,7 +70,9 @@ jobjectArray JNICALL newUploadsOf(JNIEnv* env, jclass, jstring dataDirectory, js
     if (std::string code = nativeString(env, region); !code.empty()) {
         locale.region = std::move(code);
     }
-    const auto uploads = newUploads(nativeString(env, dataDirectory), std::move(locale));
+    std::vector<Upload> uploads;
+    guarded("upload check",
+            [&] { uploads = newUploads(nativeString(env, dataDirectory), std::move(locale)); });
     constexpr jsize kFields = 3; // UploadsJob.FIELDS.
     jobjectArray result = env->NewObjectArray(static_cast<jsize>(uploads.size()) * kFields,
                                               env->FindClass("java/lang/String"), nullptr);

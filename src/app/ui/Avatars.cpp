@@ -111,7 +111,11 @@ void Avatars::load() {
 }
 
 void Avatars::store(const std::string& key, const std::string& url) {
-    std::ofstream(m_cacheFile, std::ios::app) << key << ' ' << url << '\n';
+    // Appended on a worker: lookups land in bursts while scrolling, and the UI thread must not
+    // wait on storage. Appends of one short line do not interleave.
+    m_tasks.run([file = m_cacheFile, line = key + ' ' + url + '\n'] {
+        std::ofstream(file, std::ios::app) << line;
+    });
 }
 
 } // namespace sloptube::app

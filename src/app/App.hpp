@@ -119,7 +119,9 @@ struct LiveChat {
     bool polling = false;
     bool failed = false;
     Scroller scroller;
-    bool following = true; // Scrolled to the newest message, so new ones scroll it on.
+    bool following = true;      // Scrolled to the newest message, so new ones scroll it on.
+    std::vector<float> heights; // Of the first messages, measured at measuredWidth.
+    float measuredWidth = 0;
 };
 
 // Panels opened from the player's controls.
@@ -195,6 +197,8 @@ public:
 
     // Renders one frame; returns whether another should follow without waiting for events.
     bool frame();
+    // Closes a frame interrupted by an exception, so the next one starts cleanly.
+    void abandonFrame();
 
 private:
     // A seek in progress, in the official app's three ways: dragging the progress bar, dragging
@@ -329,6 +333,8 @@ private:
     void openSettings();
     void drawSettings(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max);
     void applySettings();
+    // Sizes everything for Settings::interfaceSize and Android's text size.
+    void applyScale();
 
     // Search (SearchPage.cpp): suggestions and history while typing, filters over the results.
     void submitSearch(Screen& screen, std::string query);
@@ -601,6 +607,7 @@ private:
 
     Settings m_settings;
     bool m_onScreen = true;                        // The window exists: the app is visible.
+    bool m_typing = false;                         // The keyboard is up: the caret blinks.
     bool m_pictureInPicture = false;               // Shown in a picture-in-picture window.
     std::optional<Platform::Playback> m_published; // Last state given to the media session.
     double m_publishedAt = 0;

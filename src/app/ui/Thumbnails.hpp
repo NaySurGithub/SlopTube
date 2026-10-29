@@ -10,6 +10,8 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace sloptube::http {
 class Client;
@@ -18,6 +20,7 @@ class Client;
 namespace sloptube::app {
 
 class TaskQueue;
+struct Decoded;
 
 struct Texture {
     GLuint id = 0;
@@ -42,9 +45,12 @@ public:
     // wider than `maxWidth` (default: the constructor's decode width) are downscaled.
     [[nodiscard]] const Texture* get(const std::string& url, int maxWidth = 0);
 
-    // Marks the start of a frame; textures untouched for a while become evictable and
-    // abandoned downloads are cancelled.
+    // Marks the start of a frame; textures untouched for a while become evictable, abandoned
+    // downloads are cancelled, and a few decoded images are uploaded.
     void beginFrame();
+
+    // Decoded images still wait for their upload: another frame should follow.
+    [[nodiscard]] bool uploading() const { return !m_decoded.empty(); }
 
 private:
     struct Entry {
@@ -54,6 +60,7 @@ private:
     };
 
     void evict();
+    void upload(const std::string& url, const Decoded& decoded);
 
     const http::Client& m_http;
     TaskQueue& m_tasks;
@@ -61,6 +68,9 @@ private:
     std::size_t m_capacity;
     std::uint64_t m_frame = 0;
     std::unordered_map<std::string, Entry> m_entries;
+    // Decoded on workers, uploaded a few per frame: a burst landing after a fling would otherwise
+    // be uploaded in one frame (about 1 ms per thumbnail).
+    std::vector<std::pair<std::string, std::shared_ptr<Decoded>>> m_decoded;
     std::shared_ptr<bool> m_alive = std::make_shared<bool>(true);
 };
 

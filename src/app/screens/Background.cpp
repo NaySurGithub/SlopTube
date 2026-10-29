@@ -14,6 +14,9 @@ constexpr double kAutoplayDelay = 5;
 constexpr std::int64_t kPositionDriftMs = 2000;
 // While playing unseen, the event loop wakes this often to notice the end of the video.
 constexpr int kBackgroundWakeMs = 500;
+constexpr int kPlayingWakeMs = 250;
+// The text cursor blinks; nothing else needs redrawing while typing until a key is pressed.
+constexpr int kCaretBlinkMs = 500;
 constexpr float kAutoplayCancelWidth = 120; // dp
 
 } // namespace
@@ -36,7 +39,11 @@ int App::idleWakeMs() const {
                           nextVideo().has_value();
     const bool going =
         state == media::PlayerState::Playing || state == media::PlayerState::Loading || autoplay;
-    return going && (!m_onScreen || m_pictureInPicture) ? kBackgroundWakeMs : -1;
+    if (going) {
+        // Video frames wake the loop, but not the end of playback or a stall: a slow tick does.
+        return m_onScreen && !m_pictureInPicture ? kPlayingWakeMs : kBackgroundWakeMs;
+    }
+    return m_typing ? kCaretBlinkMs : -1;
 }
 
 void App::onBridgeEvent(BridgeEvent event) {

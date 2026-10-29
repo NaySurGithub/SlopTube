@@ -51,6 +51,8 @@ without a copy.
   notification, lock screen, headset and Bluetooth controls, and picture-in-picture
 - **Live** - broadcasts in progress at every quality, rewinding up to 12 hours, and the live chat
 - **Notifications** - new uploads of your subscriptions (opt-in, in Settings)
+- **Easy to use** - a bigger text and button size (also following the phone's text size), plain
+  error messages with Retry, and an app that keeps going when something fails
 - **Shorts** - vertical pager with the next short preloaded, so swiping is instant, and double
   tap to like
 - **Subtitles** - every track, with machine translation

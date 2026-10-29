@@ -86,6 +86,8 @@ public:
 
     [[nodiscard]] innertube::Locale locale() const;
     [[nodiscard]] float density() const; // Pixels per density-independent pixel.
+    // The text size chosen in Android's settings: 1 normal, up to 2.
+    [[nodiscard]] float fontScale();
     [[nodiscard]] std::filesystem::path dataDirectory() const;
     [[nodiscard]] static std::string_view trustedCertificates();
 

@@ -96,8 +96,42 @@ bool isEmojiBlock(char32_t c) {
            (c >= 0x2B00 && c <= 0x2BFF) || (c >= 0x1F000 && c <= 0x1FAFF);
 }
 
+// Each question to the platform is a JNI round trip of about a millisecond: the answers are
+// kept, and a glyph drawn for its advance is kept for the bitmap ImGui asks for right after.
+std::unordered_map<char32_t, bool> g_emojiPresent;
+std::map<std::pair<char32_t, float>, EmojiGlyph> g_emojiDrawn;
+constexpr std::size_t kEmojiDrawnKept = 32;
+
+bool hasEmoji(char32_t c) {
+    auto [entry, inserted] = g_emojiPresent.try_emplace(c, false);
+    if (inserted) {
+        entry->second = g_emoji->has(c);
+    }
+    return entry->second;
+}
+
+std::optional<EmojiGlyph> drawEmoji(char32_t c, float sizePx, bool advanceOnly) {
+    const auto key = std::pair{c, sizePx};
+    if (const auto cached = g_emojiDrawn.find(key); cached != g_emojiDrawn.end()) {
+        if (advanceOnly) {
+            return cached->second;
+        }
+        EmojiGlyph glyph = std::move(cached->second);
+        g_emojiDrawn.erase(cached);
+        return glyph;
+    }
+    auto glyph = g_emoji->draw(c, sizePx);
+    if (glyph && advanceOnly) {
+        if (g_emojiDrawn.size() >= kEmojiDrawnKept) {
+            g_emojiDrawn.clear();
+        }
+        g_emojiDrawn.emplace(key, *glyph);
+    }
+    return glyph;
+}
+
 bool emojiContainsGlyph(ImFontAtlas*, ImFontConfig*, ImWchar c) {
-    return isEmojiModifier(c) || (isEmojiBlock(c) && g_emoji->has(c));
+    return isEmojiModifier(c) || (isEmojiBlock(c) && hasEmoji(c));
 }
 
 bool emojiLoadGlyph(ImFontAtlas* atlas, ImFontConfig* src, ImFontBaked* baked, void*, ImWchar c,
@@ -110,11 +144,11 @@ bool emojiLoadGlyph(ImFontAtlas* atlas, ImFontConfig* src, ImFontBaked* baked, v
         }
         return true;
     }
-    if (!isEmojiBlock(c) || !g_emoji->has(c)) {
+    if (!isEmojiBlock(c) || !hasEmoji(c)) {
         return false;
     }
     const float density = src->RasterizerDensity * baked->RasterizerDensity;
-    const auto glyph = g_emoji->draw(c, baked->Size * density);
+    const auto glyph = drawEmoji(c, baked->Size * density, outAdvance != nullptr);
     if (!glyph) {
         return false;
     }

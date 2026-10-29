@@ -20,6 +20,9 @@ public:
     explicit Touch(float slopPx)
         : m_slop(slopPx) {}
 
+    // Movement (px) before a press becomes a drag; follows the interface size.
+    void setSlop(float slopPx) { m_slop = slopPx; }
+
     void onMotionEvent(const AInputEvent* event);
     void beginFrame();
 

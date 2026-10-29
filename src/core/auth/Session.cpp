@@ -240,17 +240,39 @@ void Session::signOut() {
 }
 
 Result<std::string> Session::authorization() {
-    const std::scoped_lock lock(m_mutex);
+    std::unique_lock lock(m_mutex);
+    // One refresh at a time: other callers wait for its token instead of asking again.
+    m_refreshDone.wait(lock, [&] { return !m_refreshing; });
     const auto* current = active();
     if (current == nullptr) {
         return fail("auth: not signed in");
     }
-    if (unixNow() + kExpiryMarginSeconds >= current->expiresAt) {
-        if (auto refreshed = refresh(); !refreshed) {
-            return std::unexpected(refreshed.error());
+    if (unixNow() + kExpiryMarginSeconds < current->expiresAt) {
+        return "Bearer " + current->accessToken;
+    }
+    // The request runs unlocked: the UI reads the session every frame and must never wait on
+    // the network.
+    const std::string refreshToken = current->refreshToken;
+    const std::string clientId = m_stored.clientId;
+    const std::string clientSecret = m_stored.clientSecret;
+    m_refreshing = true;
+    lock.unlock();
+    auto token = requestToken(clientId, clientSecret, refreshToken);
+    lock.lock();
+    m_refreshing = false;
+    m_refreshDone.notify_all();
+    if (!token) {
+        return std::unexpected(token.error());
+    }
+    // The account may have been switched or removed meanwhile: the token goes to its own.
+    for (auto& account : m_stored.accounts) {
+        if (account.refreshToken == refreshToken) {
+            account.accessToken = token->accessToken;
+            account.expiresAt = token->expiresAt;
         }
     }
-    return "Bearer " + current->accessToken;
+    save();
+    return "Bearer " + token->accessToken;
 }
 
 Result<void> Session::ensureClientCredentials() {
@@ -283,13 +305,14 @@ Result<void> Session::ensureClientCredentials() {
     return {};
 }
 
-Result<void> Session::refresh() {
-    auto& current = *active();
+Result<Session::Token> Session::requestToken(const std::string& clientId,
+                                             const std::string& clientSecret,
+                                             const std::string& refreshToken) const {
     auto body = json::Writer()
                     .beginObject()
-                    .field("client_id", m_stored.clientId)
-                    .field("client_secret", m_stored.clientSecret)
-                    .field("refresh_token", current.refreshToken)
+                    .field("client_id", clientId)
+                    .field("client_secret", clientSecret)
+                    .field("refresh_token", refreshToken)
                     .field("grant_type", kRefreshGrant)
                     .endObject()
                     .take();
@@ -305,10 +328,8 @@ Result<void> Session::refresh() {
     if (token.empty()) {
         return fail("auth: token refresh rejected");
     }
-    current.accessToken = token;
-    current.expiresAt = unixNow() + json::integer(*root, "/expires_in");
-    save();
-    return {};
+    return Token{.accessToken = std::string(token),
+                 .expiresAt = unixNow() + json::integer(*root, "/expires_in")};
 }
 
 void Session::load() {

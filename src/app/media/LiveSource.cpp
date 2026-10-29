@@ -1,6 +1,7 @@
 #include "app/media/LiveSource.hpp"
 
 #include "app/media/Log.hpp"
+#include "app/util/Guard.hpp"
 #include "core/http/Client.hpp"
 
 #include <android/log.h>
@@ -44,7 +45,15 @@ LiveSource::LiveSource(const http::Client& http, std::string url, std::int64_t f
     , m_url(std::move(url))
     , m_next(first)
     , m_maxMisses(maxMisses) {
-    m_fetcher = std::thread([this] { fetchLoop(); });
+    m_fetcher = std::thread([this] {
+        if (!guarded("live source", [this] { fetchLoop(); })) {
+            {
+                const std::scoped_lock lock(m_mutex);
+                m_ended = true;
+            }
+            m_changed.notify_all();
+        }
+    });
 }
 
 LiveSource::~LiveSource() {

@@ -67,7 +67,7 @@ float App::drawWatchHeader(Frame& frame, ImVec2 origin, float width) {
     std::string meta =
         info ? info->views + std::string(kMetaGap) + info->date : m_watch.item.detail;
     if (!m_watch.error.empty()) {
-        meta = m_watch.error;
+        meta = friendlyError(m_watch.error);
     }
     const float moreWidth = medium.measure(theme::kCaptionSize, tr(Text::More)).x;
     c.line({origin.x + gutter, y}, textWidth - moreWidth, theme::kCaptionSize,
@@ -464,7 +464,10 @@ void App::submitComment() {
 
     // Shown immediately, as the official app does, and withdrawn if the post fails.
     const auto accounts = m_session.accounts();
-    const auto& me = accounts.at(m_session.activeAccount());
+    if (accounts.empty()) {
+        return; // Signed out meanwhile.
+    }
+    const auto& me = accounts[std::min(m_session.activeAccount(), accounts.size() - 1)];
     Comment local{
         .id = std::string(kLocalCommentPrefix) +
               std::to_string(static_cast<std::int64_t>(now() * 1000)),
@@ -684,7 +687,7 @@ void App::drawCommentList(Frame& frame, const std::shared_ptr<CommentList>& list
     }
     if (list->comments.empty() && !list->loading) {
         const std::string_view message =
-            !list->error.empty() ? std::string_view(list->error) : tr(Text::Nothing);
+            !list->error.empty() ? friendlyError(list->error) : tr(Text::Nothing);
         c.paragraph({min.x + c.dp(theme::kGutter), y + c.dp(24)}, width - c.dp(theme::kGutter) * 2,
                     theme::kBodySize, theme::kTextSecondary, message, 3, TextAlign::Center);
     }

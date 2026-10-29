@@ -41,13 +41,37 @@ void App::drawSettings(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
         {Text::UploadNotifications, Text::UploadNotificationsDetail,
          &Settings::uploadNotifications},
     }};
-    const float content = row * static_cast<float>(kToggles.size() + 1) + c.dp(theme::kGutter) * 3 +
+    const float gutter = c.dp(theme::kGutter);
+    const float sizeBlock = row + c.dp(theme::kChipHeight) + gutter;
+    const float content = sizeBlock + row * static_cast<float>(kToggles.size() + 1) + gutter * 3 +
                           c.lineHeight(theme::kCaptionSize);
     screen.feed->scroller.update(frame.touch, contentMin, max, content, frame.seconds, c.dp(1));
     frame.animating |= screen.feed->scroller.moving();
 
     c.list()->PushClipRect(contentMin, max, true);
     float y = contentMin.y - screen.feed->scroller.offset();
+
+    // Text and button size first: the setting that decides whether the rest can be read.
+    (void)switchRow(frame, tr(Text::InterfaceSize), tr(Text::InterfaceSizeDetail), {min.x, y},
+                    width, std::nullopt);
+    y += row;
+    constexpr std::array<Text, kInterfaceSizes> kSizeLabels{Text::SizeNormal, Text::SizeLarge,
+                                                            Text::SizeExtraLarge};
+    float x = min.x + gutter;
+    for (int size = 0; size < kInterfaceSizes; ++size) {
+        const bool selected = m_settings.interfaceSize == size;
+        if (chipButton(frame, tr(kSizeLabels[static_cast<std::size_t>(size)]), {x, y}, selected,
+                       x) &&
+            !selected && !screen.feed->scroller.moving()) {
+            m_settings.interfaceSize = size;
+            later([this] {
+                applySettings();
+                applyScale();
+            });
+        }
+    }
+    y += c.dp(theme::kChipHeight) + gutter;
+
     for (const Toggle& toggle : kToggles) {
         bool& value = m_settings.*toggle.value;
         if (switchRow(frame, tr(toggle.label), tr(toggle.detail), {min.x, y}, width, value) &&
@@ -69,11 +93,11 @@ void App::drawSettings(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
         std::filesystem::remove(m_platform.dataDirectory() / kSearchHistoryFile, error);
         showToast(tr(Text::SearchHistoryCleared));
     }
-    y += row + c.dp(theme::kGutter) * 2;
+    y += row + gutter * 2;
 
     const std::string version = std::string(build::kAppName) + ' ' + std::string(build::kVersion);
-    c.line({min.x + c.dp(theme::kGutter), y}, width - c.dp(theme::kGutter) * 2, theme::kCaptionSize,
-           theme::kTextSecondary, version, TextAlign::Center);
+    c.line({min.x + gutter, y}, width - gutter * 2, theme::kCaptionSize, theme::kTextSecondary,
+           version, TextAlign::Center);
     c.list()->PopClipRect();
 
     drawTitleBar(frame, screen.title, {min.x, 0}, width);

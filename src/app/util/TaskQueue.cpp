@@ -1,5 +1,10 @@
 #include "app/util/TaskQueue.hpp"
 
+#include "app/util/Guard.hpp"
+
+#include <sys/resource.h>
+#include <unistd.h>
+
 namespace sloptube::app {
 
 TaskQueue::TaskQueue(std::size_t workers, std::function<void()> wakeMainThread)
@@ -44,12 +49,16 @@ bool TaskQueue::drainMainThread() {
         ready.swap(m_mainThreadTasks);
     }
     for (auto& task : ready) {
-        task();
+        guarded("main-thread task", task);
     }
     return !ready.empty();
 }
 
 void TaskQueue::workerLoop() {
+    // Network, parsing and image decoding must never take the CPU from drawing or playback
+    // (Process.THREAD_PRIORITY_BACKGROUND). Failing to set it only costs smoothness.
+    constexpr int kBackgroundPriority = 10;
+    setpriority(PRIO_PROCESS, static_cast<id_t>(gettid()), kBackgroundPriority);
     while (true) {
         Task task;
         {
@@ -61,7 +70,7 @@ void TaskQueue::workerLoop() {
             task = std::move(m_work.front());
             m_work.pop_front();
         }
-        task();
+        guarded("worker task", task);
     }
 }
 

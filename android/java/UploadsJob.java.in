@@ -63,6 +63,8 @@ public final class UploadsJob extends JobService {
         new Thread(() -> {
             try {
                 check();
+            } catch (RuntimeException failed) {
+                // Notifications are a convenience: a failed check waits for the next one.
             } finally {
                 jobFinished(parameters, false);
             }

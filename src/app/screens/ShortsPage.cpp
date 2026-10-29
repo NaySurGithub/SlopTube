@@ -411,9 +411,8 @@ void App::drawShort(Frame& frame, const innertube::Item& item, bool current, ImV
                       theme::kTextPrimary, frame.time);
             frame.animating = true;
         }
-        if (state == media::PlayerState::Playing) {
-            frame.animating = true; // Progress bar.
-        }
+        // While playing, each new video frame wakes the loop and moves the bar; redrawing at the
+        // display's rate on top would double the work.
     }
     if (current && m_shorts.scrub) {
         // While seeking only the video and the bar show, the bar red with a handle.
