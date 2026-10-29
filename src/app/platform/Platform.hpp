@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <string>
 #include <string_view>
 
 struct android_app;
@@ -55,6 +56,29 @@ public:
     // System feedback (long press, context click) follows the user's touch feedback setting;
     // the others go to the vibrator, as in the official app.
     void haptic(Haptic haptic);
+
+    // The media notification, lock screen and headset controls (PlaybackService): the open video
+    // and where it stands. `durationMs` is 0 for a live stream.
+    struct Playback {
+        std::string videoId;
+        std::string title;
+        std::string channel;
+        std::int64_t durationMs = 0;
+        std::int64_t positionMs = 0;
+        bool playing = false;
+        bool buffering = false;
+        float speed = 1;
+        bool hasPrevious = false;
+        bool hasNext = false;
+    };
+
+    void updatePlayback(const Playback& playback);
+    void stopPlayback();
+    // Whether leaving the app turns the video of `width` x `height` into a picture-in-picture
+    // window.
+    void setPictureInPicture(bool allowed, int width, int height);
+    // Schedules or cancels the hourly check for new uploads, asking for the permission to notify.
+    void setUploadNotifications(bool enabled);
 
     // Colour emoji drawn by the system's text stack (android.graphics.Paint).
     [[nodiscard]] bool hasGlyph(char32_t codepoint);

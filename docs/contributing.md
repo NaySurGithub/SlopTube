@@ -9,6 +9,8 @@
 - Names: `PascalCase` types, `camelCase` functions and variables, `m_` members, `k` constants,
   `g_` for the rare global.
 - Comments explain *why*, not what; keep them short.
+- Java (`android/java`) only receives what Android delivers to Java classes alone and hands it
+  to native code; logic stays in C++. It compiles with `-Xlint:all -Werror`.
 - CI rejects unformatted code (see [building.md](building.md#continuous-integration)).
 - Warnings are errors in review: the build uses `-Wall -Wextra -Wpedantic -Wshadow -Wconversion`
   and must stay clean.

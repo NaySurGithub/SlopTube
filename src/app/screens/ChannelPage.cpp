@@ -1,4 +1,5 @@
-// Channel page: banner, identity, subscribe button and the channel's shelves.
+// Channel page: banner, identity, subscribe button, then the home tab's shelves or another tab
+// (videos, shorts, live, playlists).
 
 #include "app/App.hpp"
 #include "app/ui/Strings.hpp"
@@ -47,44 +48,43 @@ void App::openChannel(std::string channelId, std::string name) {
     });
 }
 
-void App::drawChannel(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
-    const Canvas& c = frame.canvas;
-    const Canvas heading = c.with(theme::kHeadingWeight);
-    const float width = max.x - min.x;
-    const float gutter = c.dp(theme::kGutter);
-    const float bar = c.dp(theme::kTopBarHeight);
-    ChannelPage& page = *screen.channel;
-    auto& summary = page.channel.summary;
-    const ImVec2 contentMin{min.x, min.y + bar};
-
-    if (page.loading || !page.error.empty()) {
-        Feed status{.loading = page.loading, .loaded = !page.loading, .error = page.error};
-        drawFeedStatus(frame, status, contentMin, max);
-        drawTitleBar(frame, screen.title, {min.x, 0}, width);
+void App::selectChannelTab(ChannelPage& page, std::optional<innertube::ChannelTab> tab) {
+    page.tab = tab;
+    if (!tab) {
         return;
     }
+    auto& feed = page.tabs[std::to_underlying(*tab)];
+    if (!feed) {
+        feed = std::make_shared<Feed>();
+        load(feed, [this, id = page.channel.summary.id, tab = *tab] {
+            return m_api.channelTab(id, tab);
+        });
+    }
+}
 
+float App::drawChannelHeader(Frame& frame, const std::shared_ptr<ChannelPage>& shared,
+                             ImVec2 origin, float width) {
+    ChannelPage& page = *shared;
+    const Canvas& c = frame.canvas;
+    const Canvas heading = c.with(theme::kHeadingWeight);
+    const float gutter = c.dp(theme::kGutter);
+    auto& summary = page.channel.summary;
     const float banner = page.channel.banner.empty() ? 0 : (width - gutter * 2) / kBannerAspect;
     const float avatar = c.dp(theme::kLargeAvatarSize);
     const float button = c.dp(theme::kButtonHeight);
-    const float shelf = c.dp(kShelfTitleHeight) + shelfHeight(frame) + gutter;
-    const float content = gutter + (banner > 0 ? banner + gutter : 0) + avatar + gutter * 1.5f +
-                          button + gutter * 2 + shelf * static_cast<float>(page.shelves.size());
-    page.scroller.update(frame.touch, contentMin, max, content, frame.seconds, c.dp(1));
-    frame.animating |= page.scroller.moving();
+    const float right = origin.x + width;
 
-    c.list()->PushClipRect(contentMin, max, true);
-    float y = contentMin.y + gutter - page.scroller.offset();
+    float y = origin.y + gutter;
     if (banner > 0) {
-        drawThumbnail(frame, page.channel.banner, {min.x + gutter, y}, {max.x - gutter, y + banner},
-                      theme::kCardRadius, kBannerDecodeWidth);
+        drawThumbnail(frame, page.channel.banner, {origin.x + gutter, y},
+                      {right - gutter, y + banner}, theme::kCardRadius, kBannerDecodeWidth);
         y += banner + gutter;
     }
 
     drawAvatar(frame, summary.avatar, summary.name,
-               {min.x + gutter + avatar * 0.5f, y + avatar * 0.5f}, theme::kLargeAvatarSize);
-    const float textX = min.x + gutter * 2 + avatar;
-    const float textWidth = max.x - gutter - textX;
+               {origin.x + gutter + avatar * 0.5f, y + avatar * 0.5f}, theme::kLargeAvatarSize);
+    const float textX = origin.x + gutter * 2 + avatar;
+    const float textWidth = right - gutter - textX;
     const float textBlock = c.lineHeight(theme::kHeadlineSize) + c.lineHeight(theme::kCaptionSize);
     const float textTop = y + (avatar - textBlock) * 0.5f;
     heading.line({textX, textTop}, textWidth, theme::kHeadlineSize, theme::kTextPrimary,
@@ -97,12 +97,108 @@ void App::drawChannel(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
            theme::kTextSecondary, byline);
     y += avatar + gutter * 1.5f;
 
-    drawSubscribeButton(frame, summary, {min.x + gutter, y}, {max.x - gutter, y + button});
-    y += button + gutter * 2;
+    drawSubscribeButton(frame, summary, {origin.x + gutter, y}, {right - gutter, y + button});
+    y += button + gutter * 1.5f;
 
-    for (std::size_t i = 0; i < page.shelves.size(); ++i) {
-        const auto& feed = page.shelves[i];
-        const auto& title = page.channel.shelves[i].title;
+    // Tabs, scrolling sideways when they do not fit, as in the official app.
+    constexpr std::array<std::pair<Text, std::optional<innertube::ChannelTab>>, 5> kTabs{{
+        {Text::Home, std::nullopt},
+        {Text::FilterVideos, innertube::ChannelTab::Videos},
+        {Text::Shorts, innertube::ChannelTab::Shorts},
+        {Text::LiveTab, innertube::ChannelTab::Live},
+        {Text::Playlists, innertube::ChannelTab::Playlists},
+    }};
+    const float chip = c.dp(theme::kChipHeight);
+    const ImVec2 rowMin{origin.x, y};
+    const ImVec2 rowMax{right, y + chip};
+    page.tabScroller.update(frame.touch, rowMin, rowMax, page.tabsWidth, frame.seconds, c.dp(1));
+    frame.animating |= page.tabScroller.moving();
+    c.list()->PushClipRect(rowMin, rowMax, true);
+    float x = origin.x + gutter - page.tabScroller.offset();
+    const float start = x;
+    for (const auto& [label, tab] : kTabs) {
+        const bool selected = page.tab == tab;
+        if (chipButton(frame, tr(label), {x, y}, selected, x) && !selected &&
+            !page.tabScroller.moving()) {
+            later([this, target = std::weak_ptr(shared), tab] {
+                if (const auto page = target.lock()) {
+                    selectChannelTab(*page, tab);
+                    page->scroller.reset();
+                }
+            });
+        }
+    }
+    page.tabsWidth = x - start + gutter;
+    c.list()->PopClipRect();
+    y += chip + gutter;
+    return y - origin.y;
+}
+
+void App::drawChannel(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
+    const Canvas& c = frame.canvas;
+    const Canvas heading = c.with(theme::kHeadingWeight);
+    const float width = max.x - min.x;
+    const float gutter = c.dp(theme::kGutter);
+    const float bar = c.dp(theme::kTopBarHeight);
+    // Shared: tab changes run later() and must find the page alive.
+    const std::shared_ptr<ChannelPage> page = screen.channel;
+    const ImVec2 contentMin{min.x, min.y + bar};
+
+    if (page->loading || !page->error.empty()) {
+        Feed status{.loading = page->loading, .loaded = !page->loading, .error = page->error};
+        drawFeedStatus(frame, status, contentMin, max);
+        drawTitleBar(frame, screen.title, {min.x, 0}, width);
+        return;
+    }
+
+    // A tab: its list under the header, scrolling together.
+    if (page->tab) {
+        const auto& feed = page->tabs[std::to_underlying(*page->tab)];
+        // Tab pages do not name the channel they list; it is this one.
+        for (auto& item : feed->page.items) {
+            if (item.channel.empty() && item.kind != innertube::ItemKind::Playlist) {
+                item.channel = page->channel.summary.name;
+                item.channelId = page->channel.summary.id;
+            }
+        }
+        const ListHeader header{
+            .height = page->headerHeight,
+            .draw = [this,
+                     page](Frame& f, ImVec2 origin,
+                           float w) { page->headerHeight = drawChannelHeader(f, page, origin, w); },
+        };
+        const ItemStyle style =
+            *page->tab == innertube::ChannelTab::Playlists ? ItemStyle::Row : ItemStyle::Card;
+        if (feed->page.items.empty()) {
+            // The header stays while the tab loads, is empty or failed.
+            const float top = contentMin.y;
+            page->headerHeight = drawChannelHeader(frame, page, {min.x, top}, width);
+            if (drawFeedStatus(frame, *feed, {min.x, top + page->headerHeight}, max, style) &&
+                feed->request) {
+                load(feed, feed->request);
+            }
+        } else {
+            drawFeed(frame, feed, style, contentMin, max, header);
+        }
+        drawTitleBar(frame, screen.title, {min.x, 0}, width);
+        return;
+    }
+
+    // Home: the header, then every shelf of the channel's home tab.
+    const float shelf = c.dp(kShelfTitleHeight) + shelfHeight(frame) + gutter;
+    const float content =
+        page->headerHeight + gutter + shelf * static_cast<float>(page->shelves.size());
+    page->scroller.update(frame.touch, contentMin, max, content, frame.seconds, c.dp(1));
+    frame.animating |= page->scroller.moving();
+
+    c.list()->PushClipRect(contentMin, max, true);
+    float y = contentMin.y - page->scroller.offset();
+    page->headerHeight = drawChannelHeader(frame, page, {min.x, y}, width);
+    y += page->headerHeight + gutter;
+
+    for (std::size_t i = 0; i < page->shelves.size(); ++i) {
+        const auto& feed = page->shelves[i];
+        const auto& title = page->channel.shelves[i].title;
         heading.line({min.x + gutter,
                       y + (c.dp(kShelfTitleHeight) - c.lineHeight(theme::kSectionSize)) * 0.5f},
                      width - gutter * 2, theme::kSectionSize, theme::kTextPrimary, title);

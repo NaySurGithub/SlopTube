@@ -16,6 +16,7 @@
 #include <span>
 #include <string_view>
 #include <thread>
+#include <utility>
 
 namespace sloptube::http {
 class Client;
@@ -60,11 +61,13 @@ public:
     void closeStandby();
 
     void setPaused(bool paused);
-    // Playback rate, pitch preserved: 1 is normal, 2 twice as fast. Carries over to later videos.
+    // Playback rate, pitch preserved: 1 is normal, 2 twice as fast. Carries over to later videos;
+    // live streams always play at 1.
     void setSpeed(float speed);
 
     [[nodiscard]] float speed() const { return m_speed; }
 
+    // A live stream seeks within liveWindow(); at its edge, it goes back to playing live.
     void seek(std::int64_t positionUs);
 
     // Qualities of the open video, best first.
@@ -86,10 +89,26 @@ public:
 
     [[nodiscard]] std::int64_t durationUs() const;
 
-    // The open video is broadcasting now: it has no duration and cannot seek.
+    // The open video is broadcasting now: it has no duration; liveWindow() is where it can seek.
     [[nodiscard]] bool live() const;
 
+    // Media times a live stream can play, from the oldest kept to the edge, in the clock of
+    // positionUs(); nullopt until known.
+    struct LiveWindow {
+        std::int64_t startUs = 0;
+        std::int64_t edgeUs = 0;
+    };
+
+    [[nodiscard]] std::optional<LiveWindow> liveWindow() const;
+
+    // Decodes without drawing while the app is not on screen: sound and the clock go on, and the
+    // decoder never waits for frames nobody takes.
+    void setVideoHidden(bool hidden);
+
     [[nodiscard]] AImageReader* imageReader() const;
+
+    // Size of the video frames in pixels; zero before the first is decoded.
+    [[nodiscard]] std::pair<int, int> videoSize() const;
 
     // Details of the open video; null when none is.
     [[nodiscard]] const innertube::VideoDetails* details() const;
@@ -106,9 +125,11 @@ private:
     static void stopSession(std::unique_ptr<Session>& session);
     void decodeLoop(Session& session);
     void loaderLoop(Session& session);
-    // `firstSegment` is where a live stream starts; negative for near the live edge.
-    [[nodiscard]] std::unique_ptr<Input>
-    openInput(const innertube::Format& format, Session& session, std::int64_t firstSegment = -1);
+    // `firstSegment` is where a live stream starts; negative for near the live edge. A live seek
+    // gives up quickly on segments that are gone (`seeking`).
+    [[nodiscard]] std::unique_ptr<Input> openInput(const innertube::Format& format,
+                                                   Session& session, std::int64_t firstSegment = -1,
+                                                   bool seeking = false);
 
     const http::Client& m_http;
     std::function<void()> m_onFrame;
@@ -118,7 +139,9 @@ private:
     int m_preferredLines = 0; // Resolution chosen by the user; 0 for Auto.
 
     std::atomic<float> m_speed = 1;
-    bool m_failed = false; // The last open() found nothing playable.
+    std::atomic<bool> m_videoHidden = false;
+    std::atomic<bool> m_repaint = false; // Show the next frame at once: the picture is stale.
+    bool m_failed = false;               // The last open() found nothing playable.
 
     std::unique_ptr<Session> m_session;
     std::unique_ptr<Session> m_standby;

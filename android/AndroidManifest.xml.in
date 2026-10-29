@@ -12,17 +12,25 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Haptic feedback of the player (zoom, seeking), as in the official app. -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Playback in the background, with its media notification (PlaybackService). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- New upload notifications (UploadsJob), kept scheduled across reboots. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:label="@SLOPTUBE_APP_NAME@"
         android:icon="@mipmap/ic_launcher"
-        android:hasCode="false"
+        android:hasCode="true"
         android:extractNativeLibs="false"
         android:allowBackup="false"
         android:theme="@style/SlopTube">
         <activity
-            android:name="android.app.NativeActivity"
+            android:name=".SlopTubeActivity"
             android:exported="true"
+            android:supportsPictureInPicture="true"
+            android:resizeableActivity="true"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard|density|uiMode"
             android:windowSoftInputMode="adjustNothing"
             android:launchMode="singleTask">
@@ -32,5 +40,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <service
+            android:name=".PlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+        <service
+            android:name=".UploadsJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
     </application>
 </manifest>

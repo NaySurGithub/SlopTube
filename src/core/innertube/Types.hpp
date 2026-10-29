@@ -27,6 +27,8 @@ enum class Endpoint : std::uint8_t {
     EditPlaylist,
     CreatePlaylist,
     ReelSequence,
+    ChannelTab, // `browse` through MWEB: a channel's videos, shorts, live or playlists tab.
+    LiveChat,
 };
 
 enum class ItemKind : std::uint8_t {
@@ -66,6 +68,53 @@ struct Item {
     std::string avatar;    // Uploader avatar, when the renderer carries one.
 };
 
+// Search filters, as the server's own filter menu offers them.
+enum class UploadDate : std::uint8_t {
+    Any,
+    LastHour,
+    Today,
+    ThisWeek,
+    ThisMonth,
+    ThisYear,
+};
+
+enum class ResultType : std::uint8_t {
+    Any,
+    Video,
+    Short,
+    Channel,
+    Playlist,
+    Movie,
+};
+
+enum class Duration : std::uint8_t {
+    Any,
+    UnderThreeMinutes,
+    ThreeToTwentyMinutes,
+    OverTwentyMinutes,
+};
+
+struct SearchFilters {
+    bool popular = false; // Sorted by popularity rather than relevance.
+    UploadDate date = UploadDate::Any;
+    ResultType type = ResultType::Any;
+    Duration duration = Duration::Any;
+    bool live = false;
+    bool hd = false;
+    bool fourK = false;
+    bool subtitles = false;
+
+    [[nodiscard]] bool operator==(const SearchFilters&) const = default;
+};
+
+// The tabs of a channel page besides its home.
+enum class ChannelTab : std::uint8_t {
+    Videos,
+    Shorts,
+    Live,
+    Playlists,
+};
+
 struct Page {
     std::vector<Item> items;
     std::string continuation; // Empty when there are no further pages.
@@ -86,6 +135,7 @@ struct Format {
     bool defaultAudio = true; // Original language among dubbed audio tracks.
     // Live streams: media time of one segment, fetched with "&sq=<number>"; 0 for files.
     int segmentSeconds = 0;
+    int dvrSeconds = 0; // Live: how far behind the edge segments can be played.
 
     [[nodiscard]] bool hasVideo() const { return width > 0; }
 
@@ -259,6 +309,21 @@ struct Post {
 struct PostPage {
     std::vector<Post> posts;
     std::string continuation;
+};
+
+// A message of a live stream's chat.
+struct ChatMessage {
+    std::string id;
+    std::string author; // "@handle".
+    std::string avatar;
+    std::string text;   // Emoji as characters; channel emoji as their ":shortcut:".
+    std::string amount; // Super Chat amount, localised; empty for an ordinary message.
+};
+
+struct ChatPage {
+    std::vector<ChatMessage> messages; // Oldest first.
+    std::string continuation;          // Empty once the chat is over.
+    int pollMs = 0;                    // When to ask for the next page.
 };
 
 } // namespace sloptube::innertube

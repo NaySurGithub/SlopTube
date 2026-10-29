@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <utility>
 
 namespace sloptube::innertube {
@@ -15,7 +16,7 @@ namespace {
 constexpr std::string_view kBaseUrl = "https://youtubei.googleapis.com/youtubei/v1/";
 constexpr std::string_view kQuery = "?prettyPrint=false";
 
-constexpr std::array<std::string_view, 17> kEndpointPaths{
+constexpr std::array<std::string_view, 19> kEndpointPaths{
     "browse",
     "next",
     "player",
@@ -33,8 +34,10 @@ constexpr std::array<std::string_view, 17> kEndpointPaths{
     "browse/edit_playlist",
     "playlist/create",
     "reel/reel_watch_sequence",
+    "browse",
+    "live_chat/get_live_chat",
 };
-static_assert(kEndpointPaths.size() == std::to_underlying(Endpoint::ReelSequence) + 1);
+static_assert(kEndpointPaths.size() == std::to_underlying(Endpoint::LiveChat) + 1);
 
 constexpr std::string_view kAddVideoAction = "ACTION_ADD_VIDEO";
 constexpr std::string_view kRemoveVideoAction = "ACTION_REMOVE_VIDEO_BY_VIDEO_ID";
@@ -115,6 +118,100 @@ constexpr std::string_view kPostsTabParams = "EgVwb3N0c_IGBAoCSgA%3D";
 constexpr std::size_t kPostChannels = 6;
 constexpr std::size_t kPostsPerChannel = 3;
 
+// Search filter params (field numbers and values of the web client's filter menu): sort, then a
+// message of filters.
+namespace search_params {
+constexpr std::uint32_t kSort = 1;
+constexpr std::uint64_t kSortPopular = 3;
+constexpr std::uint32_t kFilters = 2;
+constexpr std::uint32_t kDate = 1;
+constexpr std::uint32_t kType = 2;
+constexpr std::uint32_t kDuration = 3;
+constexpr std::uint32_t kHd = 4;
+constexpr std::uint32_t kSubtitles = 5;
+constexpr std::uint32_t kLive = 8;
+constexpr std::uint32_t kFourK = 14;
+// Indexed by the enums; 0 leaves the filter out.
+constexpr std::array<std::uint64_t, 6> kDates{0, 1, 2, 3, 4, 5};
+constexpr std::array<std::uint64_t, 6> kTypes{0, 1, 9, 2, 3, 4};
+constexpr std::array<std::uint64_t, 4> kDurations{0, 4, 5, 2};
+} // namespace search_params
+
+std::string searchParams(const SearchFilters& filters) {
+    using namespace search_params;
+    protobuf::Writer inner;
+    const auto add = [&](std::uint32_t field, std::uint64_t value) {
+        if (value != 0) {
+            inner.varint(field, value);
+        }
+    };
+    add(kDate, kDates[std::to_underlying(filters.date)]);
+    add(kType, kTypes[std::to_underlying(filters.type)]);
+    add(kDuration, kDurations[std::to_underlying(filters.duration)]);
+    add(kHd, filters.hd ? 1 : 0);
+    add(kSubtitles, filters.subtitles ? 1 : 0);
+    add(kLive, filters.live ? 1 : 0);
+    add(kFourK, filters.fourK ? 1 : 0);
+    protobuf::Writer params;
+    if (filters.popular) {
+        params.varint(kSort, kSortPopular);
+    }
+    if (!inner.data().empty()) {
+        params.message(kFilters, inner);
+    }
+    return protobuf::base64(params.data());
+}
+
+// Search completions as the official apps get them, in plain JSON (`xhr=t`).
+constexpr std::string_view kSuggestionsUrl =
+    "https://suggestqueries-clients6.youtube.com/complete/search?client=youtube&ds=yt&xhr=t";
+
+std::string percentEncoded(std::string_view text) {
+    constexpr std::string_view kHex = "0123456789ABCDEF";
+    std::string out;
+    for (const char ch : text) {
+        const auto byte = static_cast<unsigned char>(ch);
+        if (std::isalnum(byte) != 0 || ch == '-' || ch == '_' || ch == '.' || ch == '~') {
+            out += ch;
+        } else {
+            out += '%';
+            out += kHex[byte >> 4];
+            out += kHex[byte & 0x0F];
+        }
+    }
+    return out;
+}
+
+// A channel's tabs (MWEB), as its home tab links to them; the same for every channel.
+constexpr std::array<std::string_view, 4> kChannelTabParams{
+    "EgZ2aWRlb3PyBgQKAjoA",
+    "EgZzaG9ydHPyBgUKA5oBAA%3D%3D",
+    "EgdzdHJlYW1z8gYECgJ6AA%3D%3D",
+    "EglwbGF5bGlzdHPyBgoKCEIGCgIQaCIA",
+};
+static_assert(kChannelTabParams.size() == std::to_underlying(ChannelTab::Playlists) + 1);
+
+// Live chat token: a message holding, URL-escaped, the base64 of the stream's ids, plus options
+// (as the web client's own token decodes).
+namespace chat_params {
+constexpr std::uint32_t kRoot = 119693434;
+constexpr std::uint32_t kStream = 3;
+constexpr std::uint32_t kVideoIds = 1;
+constexpr std::uint32_t kVideoIdsInner = 5;
+constexpr std::uint32_t kChannelId = 1;
+constexpr std::uint32_t kVideoId = 2;
+constexpr std::uint32_t kVideo = 3;
+constexpr std::uint32_t kVideoField = 48687757;
+constexpr std::uint32_t kVideoFieldId = 1;
+constexpr std::uint32_t kStreamFlag = 4;
+constexpr std::uint32_t kFlag = 6;
+constexpr std::uint32_t kView = 16;
+constexpr std::uint32_t kViewMode = 1;
+constexpr std::uint64_t kAllMessages = 1; // Rather than "Top chat" (4).
+constexpr std::uint32_t kViewOption = 3;
+constexpr std::uint64_t kViewOptionValue = 2;
+} // namespace chat_params
+
 // Browse ids of a playlist page are the playlist id with this prefix.
 constexpr std::string_view kPlaylistBrowsePrefix = "VL";
 
@@ -137,6 +234,8 @@ constexpr bool isRead(Endpoint endpoint) {
     case Endpoint::Accounts:
     case Endpoint::AddToPlaylistOptions:
     case Endpoint::ReelSequence:
+    case Endpoint::ChannelTab:
+    case Endpoint::LiveChat:
         return true;
     default:
         return false;
@@ -160,10 +259,42 @@ Result<Page> Api::feed(Feed feed) {
     return browse(kFeedBrowseIds[std::to_underlying(feed)]);
 }
 
-Result<Page> Api::search(std::string_view query) {
+Result<Page> Api::search(std::string_view query, const SearchFilters& filters) {
     auto body = openBody();
     body.field("query", query);
+    if (filters != SearchFilters{}) {
+        body.field("params", searchParams(filters));
+    }
     return pageRequest(Endpoint::Search, std::move(body));
+}
+
+Result<std::vector<std::string>> Api::searchSuggestions(std::string_view query) {
+    std::string url(kSuggestionsUrl);
+    url += "&hl=" + percentEncoded(m_locale.language);
+    url += "&gl=" + percentEncoded(m_locale.region);
+    url += "&q=" + percentEncoded(query);
+    auto response = m_http.send({.url = url, .retryOnStall = true});
+    if (!response) {
+        return std::unexpected(response.error());
+    }
+    if (!response->ok()) {
+        return fail("suggestions: HTTP " + std::to_string(response->status));
+    }
+    auto root = json::parse(response->body);
+    if (!root) {
+        return std::unexpected(root.error());
+    }
+    // ["query", [["suggestion", 0, [...]], ...], {...}]
+    std::vector<std::string> suggestions;
+    simdjson::dom::array entries;
+    if (!root->at_pointer("/1").get_array().get(entries)) {
+        for (const auto entry : entries) {
+            if (auto text = json::string(entry, "/0"); !text.empty()) {
+                suggestions.emplace_back(text);
+            }
+        }
+    }
+    return suggestions;
 }
 
 Result<Page> Api::shorts() {
@@ -241,6 +372,53 @@ Result<Channel> Api::channel(std::string_view channelId) {
     auto result = parser::channel(*root);
     result.summary.id = channelId;
     return result;
+}
+
+Result<Page> Api::channelTab(std::string_view channelId, ChannelTab tab) {
+    auto body = openBody();
+    body.field("browseId", channelId).field("params", kChannelTabParams[std::to_underlying(tab)]);
+    auto root = checked(Endpoint::ChannelTab, ClientKind::Mweb, std::move(body));
+    if (!root) {
+        return std::unexpected(root.error());
+    }
+    Page page = parser::channelTab(*root, tab);
+    page.source = Endpoint::ChannelTab;
+    return page;
+}
+
+std::string Api::liveChatToken(std::string_view channelId, std::string_view videoId) {
+    using namespace chat_params;
+    protobuf::Writer ids;
+    ids.bytes(kChannelId, channelId).bytes(kVideoId, videoId);
+    protobuf::Writer idsOuter;
+    idsOuter.message(kVideoIdsInner, ids);
+    protobuf::Writer video;
+    video.bytes(kVideoFieldId, videoId);
+    protobuf::Writer videoOuter;
+    videoOuter.message(kVideoField, video);
+    protobuf::Writer stream;
+    stream.message(kVideoIds, idsOuter).message(kVideo, videoOuter).varint(kStreamFlag, 1);
+    std::string escaped;
+    for (const char ch : protobuf::base64Url(stream.data())) {
+        escaped += ch == '=' ? std::string_view("%3D") : std::string_view(&ch, 1);
+    }
+    protobuf::Writer view;
+    view.varint(kViewMode, kAllMessages).varint(kViewOption, kViewOptionValue);
+    protobuf::Writer inner;
+    inner.bytes(kStream, escaped).varint(kFlag, 1).message(kView, view);
+    protobuf::Writer root;
+    root.message(kRoot, inner);
+    return protobuf::base64Url(root.data());
+}
+
+Result<ChatPage> Api::liveChat(std::string_view token) {
+    auto body = openBody();
+    body.field("continuation", token);
+    auto root = checked(Endpoint::LiveChat, kMetadataClient, std::move(body));
+    if (!root) {
+        return std::unexpected(root.error());
+    }
+    return parser::liveChat(*root);
 }
 
 Result<std::string> Api::channelAvatar(std::string_view channelId) {
@@ -495,6 +673,17 @@ Result<void> Api::reply(std::string_view videoId, std::string_view commentId,
 Result<Page> Api::continuation(const Page& page) {
     if (page.source == Endpoint::ReelSequence) {
         return reelSequence(page.continuation);
+    }
+    if (page.source == Endpoint::ChannelTab) {
+        auto body = openBody();
+        body.field("continuation", page.continuation);
+        auto root = checked(Endpoint::ChannelTab, ClientKind::Mweb, std::move(body));
+        if (!root) {
+            return std::unexpected(root.error());
+        }
+        Page next = parser::channelTab(*root, std::nullopt);
+        next.source = Endpoint::ChannelTab;
+        return next;
     }
     auto body = openBody();
     body.field("continuation", page.continuation);

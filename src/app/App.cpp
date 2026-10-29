@@ -1,8 +1,10 @@
 #include "app/App.hpp"
 
+#include "app/DataFiles.hpp"
 #include "app/ui/Motion.hpp"
 #include "app/ui/Strings.hpp"
 #include "app/ui/Theme.hpp"
+#include "app/util/Files.hpp"
 #include "core/innertube/Storyboard.hpp"
 
 #include <GLES3/gl3.h>
@@ -18,6 +20,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <format>
+#include <ranges>
 #include <thread>
 #include <tuple>
 
@@ -27,10 +30,6 @@ namespace {
 using innertube::Item;
 using innertube::ItemKind;
 
-constexpr std::string_view kSessionFile = "session.json";
-constexpr std::string_view kAvatarCacheFile = "avatars.txt";
-constexpr std::string_view kSubtitlesFile = "subtitles.txt";
-constexpr std::string_view kDownloadsDirectory = "downloads";
 constexpr std::size_t kWorkerThreads = 4;
 constexpr std::size_t kThumbnailCapacity = 48;
 constexpr int kThumbnailDecodeWidth = 480; // Source resolution of hqdefault.jpg.
@@ -58,6 +57,18 @@ constexpr float kChapterTitleGap = 8; // dp between the chapter title and the ti
 constexpr float kChapterGap = 2;        // dp
 constexpr float kSeekingChapterGap = 3; // dp
 constexpr std::string_view kChapterSeparator = " • ";
+// Speeds of the player menu, as the official app offers them.
+constexpr std::array<float, 8> kSpeeds{0.25f, 0.5f, 0.75f, 1, 1.25f, 1.5f, 1.75f, 2};
+
+// "Normal" for 1, else "1.5x" (the official app's wording).
+std::string speedLabel(float speed) {
+    if (speed == 1) {
+        return std::string(tr(Text::NormalSpeed));
+    }
+    std::string label = std::format("{:g}x", speed);
+    return label;
+}
+
 // A broadcast's time row: a red dot before "LIVE".
 constexpr float kLiveDot = 8;    // dp
 constexpr float kLiveDotGap = 6; // dp
@@ -178,11 +189,28 @@ App::App(android_app* native)
                                               m_platform.dataDirectory() / kDownloadsDirectory);
     ImGui_ImplOpenGL3_Init("#version 300 es");
 
+    m_settings = Settings::load(m_platform.dataDirectory() / kSettingsFile);
+    applySettings();
+    if (auto history = readText(m_platform.dataDirectory() / kSearchHistoryFile)) {
+        for (const auto line : std::views::split(*history, '\n')) {
+            if (!line.empty()) {
+                m_searchHistory.emplace_back(line.begin(), line.end());
+            }
+        }
+    }
+    // Java events (media buttons, picture-in-picture, notification taps) arrive on Java threads.
+    setBridgeHandler([this](BridgeEvent event) {
+        m_tasks.post(
+            [this, event = std::move(event)]() mutable { onBridgeEvent(std::move(event)); });
+    });
+
     reloadAccountFeeds();
     refreshProfile();
 }
 
 App::~App() {
+    setBridgeHandler(nullptr);
+    m_platform.stopPlayback();
     m_signIn.cancelled->store(true);
     m_videoSurface->release();
     m_player.close();
@@ -194,12 +222,17 @@ App::~App() {
 }
 
 void App::onWindowCreated(ANativeWindow* window) {
+    m_onScreen = true;
+    m_player.setVideoHidden(false);
     m_display.attach(window);
     ImGui_ImplAndroid_Init(window);
     onInsetsChanged();
 }
 
 void App::onWindowDestroyed() {
+    // Playback goes on in the background (Settings::backgroundPlay, onStop), unseen.
+    m_onScreen = false;
+    m_player.setVideoHidden(true);
     ImGui_ImplAndroid_Shutdown();
     m_display.detach();
 }
@@ -209,7 +242,7 @@ void App::onInsetsChanged() {
 }
 
 void App::onPause() {
-    m_player.setPaused(true);
+    // Playback goes on into picture-in-picture, or stops when the app is gone (onStop).
 }
 
 std::int32_t App::onInput(const AInputEvent* event) {
@@ -248,8 +281,18 @@ bool App::canGoBack() const {
 
 void App::goBack() {
     if (m_watch.menu != PlayerMenu::None) {
-        m_watch.menu =
-            m_watch.menu == PlayerMenu::Translations ? PlayerMenu::Subtitles : PlayerMenu::None;
+        switch (m_watch.menu) {
+        case PlayerMenu::Translations:
+            m_watch.menu = PlayerMenu::Subtitles;
+            break;
+        case PlayerMenu::Quality:
+        case PlayerMenu::Speed:
+            m_watch.menu = PlayerMenu::Settings;
+            break;
+        default:
+            m_watch.menu = PlayerMenu::None;
+            break;
+        }
         m_watch.menuScroller.reset();
         return;
     }
@@ -640,7 +683,7 @@ void App::closeVideo() {
     m_mini.watch.reset();
     m_subtitles->close();
     m_speedHeld = false;
-    m_player.setSpeed(1);
+    m_player.setSpeed(m_speed);
     m_watch.item.id.clear(); // Drops stream and metadata results still in flight.
     m_videoSurface->release();
     m_player.close();
@@ -767,6 +810,11 @@ void App::loadMore(const std::shared_ptr<Feed>& feed) {
 
 bool App::frame() {
     m_tasks.drainMainThread();
+    updateAutoplay();
+    syncPlayback();
+    if (m_watch.details && m_watch.details->live && watching() && m_onScreen) {
+        pollLiveChat();
+    }
     if (!m_display.hasSurface()) {
         return false;
     }
@@ -802,7 +850,29 @@ bool App::frame() {
     };
     const ImVec2 min{0, m_insets.top};
     const ImVec2 max{display.x, display.y - m_insets.bottom};
+    if (m_pictureInPicture) {
+        drawPictureInPicture(frame, display);
+    } else {
+        drawInterface(frame, min, max, display);
+    }
 
+    ImGui::End();
+    ImGui::PopStyleVar(2);
+    ImGui::Render();
+
+    glViewport(0, 0, static_cast<GLsizei>(display.x), static_cast<GLsizei>(display.y));
+    const ImVec4 clear = ImGui::ColorConvertU32ToFloat4(theme::kBackground);
+    glClearColor(clear.x, clear.y, clear.z, 1);
+    glClear(GL_COLOR_BUFFER_BIT);
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    m_display.present();
+
+    const bool typing = ImGui::GetIO().WantTextInput;
+    m_platform.setKeyboardVisible(typing);
+    return frame.animating || m_touch.down() || typing;
+}
+
+void App::drawInterface(Frame& frame, ImVec2 min, ImVec2 max, ImVec2 display) {
     // Modal sheets are drawn first on a top layer so they get input before the screen beneath,
     // which only sees touches that started outside them.
     ImDrawList* list = frame.canvas.list();
@@ -840,21 +910,6 @@ bool App::frame() {
     drawToast(frame, min, max);
     drawSplash(frame, display);
     m_touch.setBlocked(false);
-
-    ImGui::End();
-    ImGui::PopStyleVar(2);
-    ImGui::Render();
-
-    glViewport(0, 0, static_cast<GLsizei>(display.x), static_cast<GLsizei>(display.y));
-    const ImVec4 clear = ImGui::ColorConvertU32ToFloat4(theme::kBackground);
-    glClearColor(clear.x, clear.y, clear.z, 1);
-    glClear(GL_COLOR_BUFFER_BIT);
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-    m_display.present();
-
-    const bool typing = ImGui::GetIO().WantTextInput;
-    m_platform.setKeyboardVisible(typing);
-    return frame.animating || m_touch.down() || typing;
 }
 
 // --- Screens ------------------------------------------------------------------------------------
@@ -915,6 +970,9 @@ void App::drawScreen(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
         break;
     case Route::Downloads:
         drawDownloads(frame, screen, min, screenMax);
+        break;
+    case Route::Settings:
+        drawSettings(frame, screen, min, screenMax);
         break;
     }
     const ImVec2 offset = screen.route == Route::Watch
@@ -1020,8 +1078,13 @@ void App::drawHomeBar(Frame& frame, ImVec2 origin, float width) {
         later([this] {
             m_query.fill(0);
             m_focusSearch = true;
+            m_filtersOpen = false;
             push(Screen{.route = Route::Search});
         });
+    }
+    right -= icon * 2;
+    if (iconButton(frame, Icon::Settings, {right, centerY}, theme::kTextPrimary)) {
+        later([this] { openSettings(); });
     }
 }
 
@@ -1177,45 +1240,6 @@ void App::drawFeedScreen(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
     drawTitleBar(frame, screen.title, {min.x, 0}, max.x - min.x);
 }
 
-void App::drawSearch(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
-    const Canvas& c = frame.canvas;
-    const float width = max.x - min.x;
-    const float bar = c.dp(theme::kTopBarHeight);
-
-    if (screen.feed->loaded || screen.feed->loading) {
-        drawFeed(frame, screen.feed, ItemStyle::Card, {min.x, min.y + bar}, max);
-    }
-
-    c.rect({min.x, 0}, {max.x, min.y + bar}, theme::kBackground);
-    const float centerY = min.y + bar * 0.5f;
-    const float icon = bar * 0.5f;
-    if (iconButton(frame, Icon::Back, {min.x + icon, centerY}, theme::kTextPrimary)) {
-        later([this] { goBack(); });
-    }
-
-    const float fieldX = min.x + icon * 2;
-    const float fieldHeight = c.dp(theme::kSearchFieldHeight);
-    ImGui::SetCursorScreenPos({fieldX, centerY - fieldHeight * 0.5f});
-    ImGui::SetNextItemWidth(width - (fieldX - min.x) - c.dp(theme::kGutter));
-    ImGui::PushFont(nullptr, c.dp(theme::kTitleSize));
-    if (m_focusSearch) {
-        ImGui::SetKeyboardFocusHere();
-        m_focusSearch = false;
-    }
-    const bool submitted = ImGui::InputTextWithHint(
-        "##query", tr(Text::SearchHint).data(), m_query.data(), m_query.size(),
-        ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
-    ImGui::PopFont();
-
-    const std::string query(m_query.data());
-    if (submitted && !query.empty()) {
-        ImGui::ClearActiveID(); // Dismisses the keyboard.
-        screen.argument = query;
-        screen.feed = std::make_shared<Feed>();
-        load(screen.feed, [this, query] { return m_api.search(query); });
-    }
-}
-
 void App::drawWatch(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
     // Fullscreen: the player covers the whole display and nothing else is drawn.
     if (m_fullscreen) {
@@ -1295,8 +1319,12 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
         list->PopClipRect();
         return;
     }
-    const auto durationMs = static_cast<std::int64_t>(m_player.durationUs() / 1000);
-    const auto playedMs = static_cast<std::int64_t>(m_player.positionUs() / 1000);
+    // A live stream's bar spans what it keeps, up to its edge.
+    const auto live = liveTimeline();
+    const auto durationMs =
+        live ? live->durationMs : static_cast<std::int64_t>(m_player.durationUs() / 1000);
+    const auto playedMs =
+        live ? live->playedMs : static_cast<std::int64_t>(m_player.positionUs() / 1000);
     const float width = max.x - min.x;
     const auto toX = [&](std::int64_t ms) {
         return durationMs > 0 ? min.x + width * std::clamp(static_cast<float>(ms) /
@@ -1366,7 +1394,7 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
                                                                     static_cast<float>(durationMs));
         } else {
             seek.targetMs = toMs(at.x);
-            if (seek.origin.y - at.y > pull) {
+            if (seek.origin.y - at.y > pull && !live) { // Lives have no storyboard.
                 m_watch.fine = true;
                 m_watch.fineResume = playing;
                 m_usedFineSeek = true;
@@ -1390,7 +1418,11 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
         frame.animating = true;
     } else if (m_watch.seek) {
         if (!m_watch.seek->undo.armed(frame.time)) {
-            m_player.seek(m_watch.seek->targetMs * 1000);
+            if (live) {
+                seekLive(m_watch.seek->targetMs);
+            } else {
+                m_player.seek(m_watch.seek->targetMs * 1000);
+            }
         }
         m_watch.seek.reset();
         m_watch.shownPreview.reset();
@@ -1409,8 +1441,14 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
     } else if (seeking) {
         const SeekState& seek = *m_watch.seek;
         const bool undo = seek.undo.armed(frame.time);
-        drawScrubPreview(frame, min, max, seek.targetMs, barY,
-                         undo ? tr(Text::ReleaseToCancel) : std::string_view{});
+        // A live stream's time is how far behind live it is.
+        std::string label;
+        if (undo) {
+            label = tr(Text::ReleaseToCancel);
+        } else if (live) {
+            label = '-' + formatDuration((durationMs - seek.targetMs) / 1000);
+        }
+        drawScrubPreview(frame, min, max, seek.targetMs, barY, label);
         if (!seek.easy && !undo && !m_usedFineSeek && !m_watch.storyboard.levels.empty()) {
             const float gutter = c.dp(theme::kGutter);
             c.line({min.x + gutter,
@@ -1419,7 +1457,12 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
                    tr(Text::PullUpForPrecise), TextAlign::Center);
         }
     }
-    if (m_watch.controlsVisible && !hideControls) {
+    // The autoplay countdown replaces the controls once the video has ended.
+    const bool autoplaying = m_watch.endedAt >= 0 && m_settings.autoplay &&
+                             !m_watch.autoplayCancelled && nextVideo().has_value();
+    if (autoplaying) {
+        drawAutoplay(frame, min, max);
+    } else if (m_watch.controlsVisible && !hideControls) {
         c.rect(min, max, theme::kScrim);
         if (!loading &&
             iconButton(frame, playing ? Icon::Pause : Icon::Play, center, theme::kTextPrimary)) {
@@ -1460,19 +1503,30 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
                               c.dp(seeking ? theme::kScrubHandle : theme::kProgressHandle),
                               theme::kAccent);
     }
-    if (m_watch.controlsVisible && !hideControls) {
+    if (m_watch.controlsVisible && !hideControls && !autoplaying) {
         // Controls stay clear of a display cutout beside a fullscreen video.
         const float left = min.x + (m_fullscreen ? m_insets.left : 0);
         const float right = max.x - (m_fullscreen ? m_insets.right : 0);
         float timeX = left + c.dp(theme::kGutter);
         std::string time;
-        if (m_player.live()) {
-            // A broadcast has no position to show: a red dot and "LIVE", as the official app.
+        if (live) {
+            // "LIVE" with a dot, red at the edge; behind it, grey with how far behind, and a tap
+            // goes back to live, as in the official app.
             const float timeY = barY - c.dp(24) + c.lineHeight(theme::kCaptionSize) * 0.5f;
             list->AddCircleFilled({timeX + c.dp(kLiveDot) * 0.5f, timeY}, c.dp(kLiveDot) * 0.5f,
-                                  theme::kAccent);
+                                  live->atEdge ? theme::kAccent : theme::kTextSecondary);
+            const ImVec2 tapMin{left, timeY - c.dp(theme::kChipHeight) * 0.5f};
             timeX += c.dp(kLiveDot + kLiveDotGap);
             time = tr(Text::Live);
+            if (!live->atEdge) {
+                time += "  -" + formatDuration((live->durationMs - live->playedMs) / 1000);
+                const ImVec2 tapMax{timeX + c.measure(theme::kCaptionSize, time).x,
+                                    timeY + c.dp(theme::kChipHeight) * 0.5f};
+                if (m_touch.tapped(tapMin, tapMax)) {
+                    seekLive(live->durationMs);
+                    m_watch.controlsShownAt = frame.time;
+                }
+            }
         } else {
             time = formatDuration(playedMs / 1000) + " / " + formatDuration(durationMs / 1000);
             if (!chapters.empty()) {
@@ -1487,7 +1541,7 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
         if (iconButton(frame, Icon::Settings,
                        {right - c.dp(kButtonInset), min.y + c.dp(kButtonInset)},
                        theme::kTextPrimary)) {
-            m_watch.menu = PlayerMenu::Quality;
+            m_watch.menu = PlayerMenu::Settings;
             m_watch.menuScroller.reset();
         }
         // Greyed out while tracks load and for videos without any.
@@ -1539,7 +1593,7 @@ bool App::holdForSpeed(Frame& frame, ImVec2 min, ImVec2 max, float pillTop) {
     }
     if (m_speedHeld && !pressing) {
         m_speedHeld = false;
-        m_player.setSpeed(1);
+        m_player.setSpeed(m_speed);
         std::ignore = m_touch.tapped(min, max); // The release ends the hold, nothing else.
     }
     if (!m_speedHeld) {
@@ -1630,6 +1684,42 @@ void App::drawPlayerMenu(Frame& frame, ImVec2 min, ImVec2 max) {
     switch (m_watch.menu) {
     case PlayerMenu::None:
         return;
+    case PlayerMenu::Settings: {
+        // Quality, then speed (not for a live stream, which plays at the pace it is made).
+        const auto qualities = m_player.qualities();
+        const std::optional<std::size_t> current = m_player.currentQuality();
+        std::string quality(tr(Text::Quality));
+        if (current && *current < qualities.size()) {
+            quality += " · ";
+            if (m_player.autoQuality()) {
+                quality +=
+                    std::string(tr(Text::AutoQuality)) + " (" + qualities[*current].label + ')';
+            } else {
+                quality += qualities[*current].label;
+            }
+        }
+        rows.push_back({std::move(quality), false, true});
+        if (!m_player.live()) {
+            rows.push_back(
+                {std::string(tr(Text::PlaybackSpeed)) + " · " + speedLabel(m_speed), false, true});
+        }
+        if (const auto tapped = drawMenu(frame, min, max, tr(Text::Settings), rows)) {
+            m_watch.menu = *tapped == 0 ? PlayerMenu::Quality : PlayerMenu::Speed;
+            m_watch.menuScroller.reset();
+        }
+        break;
+    }
+    case PlayerMenu::Speed: {
+        for (const float speed : kSpeeds) {
+            rows.push_back({speedLabel(speed), speed == m_speed});
+        }
+        if (const auto tapped = drawMenu(frame, min, max, tr(Text::PlaybackSpeed), rows)) {
+            m_speed = kSpeeds[*tapped];
+            m_player.setSpeed(m_speed);
+            m_watch.menu = PlayerMenu::None;
+        }
+        break;
+    }
     case PlayerMenu::Quality: {
         const auto qualities = m_player.qualities();
         const std::optional<std::size_t> current = m_player.currentQuality();

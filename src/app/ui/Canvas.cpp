@@ -271,6 +271,22 @@ void Canvas::icon(Icon icon, ImVec2 c, float sizeDp, ImU32 color) const {
         m_list->AddTriangleFilled(p(-2, -3.5f), p(-2, 3.5f), p(3.5f, 0), color);
         break;
     }
+    case Icon::History:
+        m_list->AddCircle(c, unit * 8, color, 0, stroke);
+        m_list->AddLine(c, p(0, -5), color, stroke);
+        m_list->AddLine(c, p(4, 3), color, stroke);
+        break;
+    case Icon::Tune:
+        m_list->AddLine(p(-9, -4), p(9, -4), color, stroke);
+        m_list->AddLine(p(-9, 4), p(9, 4), color, stroke);
+        m_list->AddCircleFilled(p(-3, -4), unit * 2.5f, color);
+        m_list->AddCircleFilled(p(4, 4), unit * 2.5f, color);
+        break;
+    case Icon::InsertUp:
+        m_list->AddLine(p(6, 6), p(-6, -6), color, stroke);
+        m_list->AddLine(p(-6, -6), p(2, -6), color, stroke);
+        m_list->AddLine(p(-6, -6), p(-6, 2), color, stroke);
+        break;
     case Icon::Settings: {
         // Gear: a ring with eight square teeth.
         for (int tooth = 0; tooth < 8; ++tooth) {

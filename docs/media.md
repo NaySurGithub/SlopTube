@@ -182,8 +182,19 @@ segments without a gap. Audio and video start at the same segment. A quality swi
 new video stream at the segment audio is playing, and the usual switch takes over from there.
 The broadcast is over when segments stop coming (10 misses, 2 s apart), and playback ends.
 
-The watch page shows a red dot and "LIVE" instead of the time, with no progress bar. Seeking,
-2x and downloading are not offered.
+**Rewinding.** The server keeps far more than `maxDvrDurationSec` (12 h; segments 139 h old
+still downloaded), and the app offers those 12 h. Segment *n* starts at about
+`offset + n * targetDurationSec` (within half a second: audio segments alternate 4.992 and
+5.016 s), where the offset comes from the segment audio is playing and its first sample time.
+The edge is the head learned by the last source started near it, moved on by one segment every
+5 s. `Player::liveWindow` gives the playable range in the player's clock; a seek inside it starts
+new sources at the segment holding the target and discards samples before it (`restartLive` in
+the decoder loop), and a seek within three segments of the edge starts at the edge again.
+
+The watch page's bar spans the window. "LIVE" with a red dot shows at the edge; behind it, the dot
+turns grey with how far behind ("LIVE -12:34"), and tapping it goes back to live. The seek pill
+shows the time behind live. Speed, 2x, precise seeking (there is no storyboard) and downloading
+are not offered.
 
 Closing a stream does not wait for a held request: `http::Request::cancelled` makes libcurl give
 up within about a second.
@@ -202,6 +213,35 @@ up within about a second.
 
 The first two follow the phone's touch feedback setting; the others use the vibrator, which needs
 the `VIBRATE` permission (granted at install).
+
+### Speed
+
+The player menu (the gear) lists Quality and Playback speed: 0.25x to 2x, as in the official app,
+kept for the following videos until the app closes. Holding for 2x returns to it on release.
+`TimeStretch` handles every speed the same way.
+
+### Background and picture-in-picture
+
+These go through the Java bridge (see [architecture.md](architecture.md#java-bridge)):
+
+- **Background playback.** Leaving the app destroys the window but not playback (unless turned
+  off in Settings, then `APP_CMD_STOP` pauses). The decoder goes on with frames released
+  unrendered (`Player::setVideoHidden`), so audio and video stay in sync and the decoder never
+  stalls on a full image queue. `PlaybackService`, a `mediaPlayback` foreground service, keeps
+  the process alive.
+- **Media session.** `App::syncPlayback` publishes the video (title, channel, duration, position,
+  state, speed, whether previous and next exist) when it changes, and the position only when it
+  drifts by more than 2 s from what the session extrapolates. The service shows the media
+  notification (with the thumbnail) and turns its commands, headset and Bluetooth buttons, the
+  lock screen's and the PiP window's into `MediaCommand`s. It requests audio focus while playing:
+  a call pauses and resumes after it, another app playing pauses for good, unplugging headphones
+  pauses.
+- **Picture-in-picture.** While a watch-page or mini-player video plays, the activity allows it
+  with the video's aspect ratio: Android 12+ enters by itself when the user goes home, Android 11
+  on `onUserLeaveHint`. In the window only the video is drawn. Closing the window pauses.
+- **Autoplay.** When a video ends, the next one (`nextVideo`: the list it came from, else the
+  first related video) plays after a 5 s countdown with Cancel and Play now, at once when the app
+  is not on screen. The event loop wakes twice a second while playing unseen to notice the end.
 
 ## Downloads and offline viewing (`app/downloads/`)
 
@@ -233,8 +273,9 @@ sizes. `Downloads` then saves the video under `<data>/downloads/<video id>/`:
 
 - VISIONOS is undocumented and could be closed at any time. Without it, playback falls back to
   360p, and live streams do not play at all.
-- Live streams play about 15 s behind the edge and cannot be rewound, although the server keeps
-  12 h of them. Upcoming streams and premieres show the server's reason instead.
+- Live streams start about 15 s behind the edge. Upcoming streams and premieres show the
+  server's reason instead.
+- Background playback keeps decoding video it does not show, which costs some battery.
 - Auto picks a quality when a video opens and when Auto is re-selected. It does not adapt in the
   middle of a video.
 - Qualities above 1080p (VP9/AV1 only) are not offered.

@@ -28,7 +28,7 @@ constexpr std::string_view kChapterMarkers = "MARKER_TYPE_CHAPTERS";
 constexpr std::int64_t kPostImageMinWidth = 640;
 constexpr std::array<std::string_view, 2> kPostVideoRenderers{"videoRenderer",
                                                               "compactVideoRenderer"};
-constexpr std::string_view kPostMetaSeparator = " • ";
+constexpr std::string_view kMetaSeparator = " • ";
 
 // Banners come in several widths; the smallest one at least this wide fills a phone screen.
 constexpr std::int64_t kBannerMinWidth = 1080;
@@ -261,6 +261,7 @@ void appendFormats(Element streamingData, std::string_view key, std::vector<Form
             .defaultAudio = json::string(entry, "/audioTrack/id").empty() ||
                             json::boolean(entry, "/audioTrack/audioIsDefault"),
             .segmentSeconds = static_cast<int>(json::integer(entry, "/targetDurationSec")),
+            .dvrSeconds = static_cast<int>(json::integer(entry, "/maxDvrDurationSec")),
         });
     }
 }
@@ -311,7 +312,7 @@ Item attachedVideo(Element node) {
     auto date = text(node, "/publishedTimeText");
     item.detail = std::move(views);
     if (!item.detail.empty() && !date.empty()) {
-        item.detail += kPostMetaSeparator;
+        item.detail += kMetaSeparator;
     }
     item.detail += date;
     return item;
@@ -782,6 +783,177 @@ Page reelSequence(Element root) {
         page.items.push_back(std::move(item));
     });
     page.continuation = json::string(root, "/continuationEndpoint/continuationCommand/token");
+    return page;
+}
+
+namespace {
+
+// The URL suffix of each ChannelTab, as the selected tab of an MWEB response names it.
+constexpr std::array<std::string_view, 4> kChannelTabPaths{
+    "/videos",
+    "/shorts",
+    "/streams",
+    "/playlists",
+};
+static_assert(kChannelTabPaths.size() == std::to_underlying(ChannelTab::Playlists) + 1);
+
+// The selected tab of an MWEB channel response is `tab`.
+bool showsTab(Element root, ChannelTab tab) {
+    bool shown = false;
+    json::forEachKey(root, "tabRenderer", [&](Element renderer) {
+        if (json::boolean(renderer, "/selected")) {
+            shown = json::string(renderer, "/endpoint/commandMetadata/webCommandMetadata/url")
+                        .ends_with(kChannelTabPaths[std::to_underlying(tab)]);
+        }
+    });
+    return shown;
+}
+
+// MWEB channel videos and lives (`videoWithContextRenderer`).
+Item contextVideo(Element node) {
+    Item item{
+        .id = std::string(json::string(node, "/videoId")),
+        .title = text(node, "/headline"),
+        .channelId = linkedChannel(node),
+    };
+    item.badge = text(node, "/lengthText");
+    json::forEachKey(node, "thumbnailOverlayTimeStatusRenderer", [&](Element overlay) {
+        if (json::string(overlay, "/style") == "LIVE") {
+            item.kind = ItemKind::Live;
+            item.badge = text(overlay, "/text");
+        }
+    });
+    item.detail = text(node, "/shortViewCountText");
+    if (const auto published = text(node, "/publishedTimeText"); !published.empty()) {
+        item.detail += item.detail.empty() ? "" : kMetaSeparator;
+        item.detail += published;
+    }
+    return item;
+}
+
+// MWEB channel shorts (`shortsLockupViewModel`). The title only comes inside the accessibility
+// text, "<title>, <views> - <action>", which is cut at its last separators.
+Item shortsLockup(Element node) {
+    Item item{
+        .kind = ItemKind::Short,
+        .id = std::string(json::string(node, "/onTap/innertubeCommand/reelWatchEndpoint/videoId")),
+        .detail = std::string(json::string(node, "/overlayMetadata/secondaryText/content")),
+    };
+    std::string_view label = json::string(node, "/accessibilityText");
+    if (const auto action = label.rfind(" - "); action != std::string_view::npos) {
+        label = label.substr(0, action);
+    }
+    if (const auto views = label.rfind(", "); views != std::string_view::npos) {
+        label = label.substr(0, views);
+    }
+    item.title = label;
+    return item;
+}
+
+// MWEB channel playlists (`compactPlaylistRenderer`).
+Item compactPlaylist(Element node) {
+    return Item{
+        .kind = ItemKind::Playlist,
+        .id = std::string(json::string(node, "/playlistId")),
+        .title = text(node, "/title"),
+        .channel = text(node, "/shortBylineText"),
+        .detail = text(node, "/publishedTimeText"),
+        .badge = text(node, "/videoCountShortText"),
+        .thumbnail = lastThumbnail(node, "/thumbnail/thumbnails"),
+    };
+}
+
+} // namespace
+
+Page channelTab(Element root, std::optional<ChannelTab> tab) {
+    Page page;
+    if (tab && !showsTab(root, *tab)) {
+        return page;
+    }
+    const auto add = [&](Item item) {
+        if (!item.id.empty()) {
+            page.items.push_back(std::move(item));
+        }
+    };
+    // Header chips and the about panel carry continuations too; only the list's own last entry
+    // continues it.
+    json::forEachKey(root, "richItemRenderer",
+                     [&](Element entry) {
+                         Element content;
+                         if (entry["content"].get(content)) {
+                             return;
+                         }
+                         Element node;
+                         if (!content["videoWithContextRenderer"].get(node)) {
+                             add(contextVideo(node));
+                         } else if (!content["shortsLockupViewModel"].get(node)) {
+                             add(shortsLockup(node));
+                         }
+                     },
+                     {"header"});
+    json::forEachKey(root, "compactPlaylistRenderer",
+                     [&](Element node) { add(compactPlaylist(node)); }, {"header"});
+    json::forEachKey(root, "continuationItemRenderer",
+                     [&](Element node) {
+                         page.continuation =
+                             json::string(node, "/continuationEndpoint/continuationCommand/token");
+                     },
+                     {"header", "chipBarViewModel"});
+    return page;
+}
+
+ChatPage liveChat(Element root) {
+    ChatPage page;
+    Element chat;
+    if (root.at_pointer("/continuationContents/liveChatContinuation").get(chat)) {
+        return page;
+    }
+    simdjson::dom::array actions;
+    if (!chat["actions"].get_array().get(actions)) {
+        for (const auto action : actions) {
+            Element item;
+            if (action.at_pointer("/addChatItemAction/item").get(item)) {
+                continue;
+            }
+            Element message;
+            const bool paid = !item["liveChatPaidMessageRenderer"].get(message);
+            if (!paid && item["liveChatTextMessageRenderer"].get(message)) {
+                continue; // Engagement notices, gifts and memberships.
+            }
+            ChatMessage entry{
+                .id = std::string(json::string(message, "/id")),
+                .author = text(message, "/authorName"),
+                .avatar = lastThumbnail(message, "/authorPhoto/thumbnails"),
+                .amount = paid ? text(message, "/purchaseAmountText") : std::string(),
+            };
+            simdjson::dom::array runs;
+            if (!message.at_pointer("/message/runs").get_array().get(runs)) {
+                for (const auto run : runs) {
+                    Element emoji;
+                    if (run["emoji"].get(emoji)) {
+                        entry.text += json::string(run, "/text");
+                    } else if (json::boolean(emoji, "/isCustomEmoji")) {
+                        entry.text += json::string(emoji, "/shortcuts/0");
+                    } else {
+                        entry.text += json::string(emoji, "/emojiId");
+                    }
+                }
+            }
+            if (!entry.text.empty() || paid) {
+                page.messages.push_back(std::move(entry));
+            }
+        }
+    }
+    // The next token sits under one of several keys depending on the client.
+    for (const auto key :
+         {"timedContinuationData", "invalidationContinuationData", "reloadContinuationData"}) {
+        Element next;
+        if (!chat.at_pointer(std::string("/continuations/0/") + key).get(next)) {
+            page.continuation = json::string(next, "/continuation");
+            page.pollMs = static_cast<int>(json::integer(next, "/timeoutMs"));
+            break;
+        }
+    }
     return page;
 }
 

@@ -4,6 +4,7 @@
 #include "core/json/Json.hpp"
 #include "core/util/Result.hpp"
 
+#include <optional>
 #include <string_view>
 
 // Converts InnerTube responses into the client-agnostic model. Understands both the TV "tile"
@@ -50,6 +51,13 @@ void videoDetails(json::Element root, Item& item);
 
 // Shorts of a `reel/reel_watch_sequence` page: id and poster only, and the next page's token.
 [[nodiscard]] Page reelSequence(json::Element root);
+
+// A page of a channel tab (MWEB `browse`), or a continuation of one when `tab` is absent. The
+// first page is empty when the server answered with another tab: the channel has no `tab`.
+[[nodiscard]] Page channelTab(json::Element root, std::optional<ChannelTab> tab);
+
+// `live_chat/get_live_chat`: new messages and when to ask again.
+[[nodiscard]] ChatPage liveChat(json::Element root);
 
 [[nodiscard]] std::string_view visitorData(json::Element root);
 

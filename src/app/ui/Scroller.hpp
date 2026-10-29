@@ -28,6 +28,12 @@ public:
 
     void reset();
 
+    // Jumps to `offset`, kept within the content by the next update().
+    void setOffset(float offset) {
+        m_offset = offset;
+        m_velocity = 0;
+    }
+
 private:
     Axis m_axis = Axis::Vertical;
     float m_offset = 0;

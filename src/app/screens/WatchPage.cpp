@@ -208,8 +208,33 @@ float App::drawWatchHeader(Frame& frame, ImVec2 origin, float width) {
         y += height + gutter;
     }
 
-    // Comments teaser card.
-    if (info && !info->commentsToken.empty()) {
+    // A live stream's chat, in place of comments: the newest message, the whole chat on a tap.
+    if (m_watch.details && m_watch.details->live) {
+        const float padding = gutter;
+        const ImVec2 cardMin{origin.x + gutter, y};
+        const ImVec2 cardMax{origin.x + width - gutter, y + padding * 2.5f +
+                                                            c.lineHeight(theme::kBodySize) +
+                                                            c.lineHeight(theme::kCaptionSize)};
+        c.rect(cardMin, cardMax, theme::kSurface, theme::kCardRadius);
+        drawPressed(frame, cardMin, cardMax, theme::kCardRadius);
+        medium.text({cardMin.x + padding, y + padding}, theme::kBodySize, theme::kTextPrimary,
+                    tr(Text::LiveChat));
+        const float lineY = y + padding * 1.5f + c.lineHeight(theme::kBodySize);
+        const auto& chat = m_watch.chat;
+        if (chat && !chat->messages.empty()) {
+            const auto& newest = chat->messages.back();
+            c.line({cardMin.x + padding, lineY}, cardMax.x - cardMin.x - padding * 2,
+                   theme::kCaptionSize, theme::kTextSecondary, newest.author + "  " + newest.text);
+        } else {
+            c.rect({cardMin.x + padding, lineY}, {cardMax.x - padding * 4, lineY + c.dp(10)},
+                   theme::kPlaceholder, 4);
+        }
+        if (frame.touch.tapped(cardMin, cardMax)) {
+            later([this] { openLiveChat(); });
+        }
+        y = cardMax.y + gutter;
+    } else if (info && !info->commentsToken.empty()) {
+        // Comments teaser card.
         const float padding = gutter;
         const float avatar = c.dp(theme::kSmallAvatarSize);
         const float preview = std::max(avatar, c.lineHeight(theme::kCaptionSize) * 2);
@@ -677,7 +702,6 @@ void App::drawCommentList(Frame& frame, const std::shared_ptr<CommentList>& list
 
 void App::drawCommentsSheet(Frame& frame, ImVec2 min, ImVec2 max) {
     const Canvas& c = frame.canvas;
-    const Canvas medium = c.with(Weight::Medium);
     const float gutter = c.dp(theme::kGutter);
     const float width = max.x - min.x;
     const float row = c.dp(kRowHeight);
@@ -734,20 +758,10 @@ void App::drawCommentsSheet(Frame& frame, ImVec2 min, ImVec2 max) {
     // Sort chips.
     if (!replies) {
         float x = min.x + gutter;
-        const float chip = c.dp(theme::kChipHeight);
         for (const bool newest : {false, true}) {
             const std::string_view label = tr(newest ? Text::NewestComments : Text::TopComments);
-            const float chipWidth = medium.measure(theme::kBodySize, label).x + gutter * 2;
-            const ImVec2 chipMin{x, chipsTop};
-            const ImVec2 chipMax{x + chipWidth, chipsTop + chip};
             const bool selected = m_watch.newestFirst == newest;
-            c.rect(chipMin, chipMax, selected ? theme::kTextPrimary : theme::kSurface,
-                   theme::kCornerRadius);
-            drawPressed(frame, chipMin, chipMax, theme::kCornerRadius);
-            medium.text({x + gutter, chipsTop + (chip - c.lineHeight(theme::kBodySize)) * 0.5f},
-                        theme::kBodySize, selected ? theme::kTextOnLight : theme::kTextPrimary,
-                        label);
-            if (!selected && frame.touch.tapped(chipMin, chipMax)) {
+            if (chipButton(frame, label, {x, chipsTop}, selected, x) && !selected) {
                 later([this, newest] {
                     m_watch.newestFirst = newest;
                     m_watch.comments = std::make_shared<CommentList>();
@@ -755,7 +769,6 @@ void App::drawCommentsSheet(Frame& frame, ImVec2 min, ImVec2 max) {
                                                           : m_watch.info->commentsToken);
                 });
             }
-            x = chipMax.x + gutter * 0.75f;
         }
     }
 }

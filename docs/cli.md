@@ -12,11 +12,14 @@ build/host-debug/tools/cli/sloptube-cli <command> [args]
 | --- | --- |
 | `login` / `logout` | Device-flow sign-in (prints the code and URL) / forget the active account |
 | `home`, `subs`, `history`, `playlists`, `shorts` `[pages]` | Feed items, following continuations as the app does (`appendPage`) |
-| `search <query>` | Search results (with each channel's avatar URL) |
+| `search <query> [filters]` | Search results (with each channel's avatar URL). Filters: `popular`, `hour`, `today`, `week`, `month`, `year`, `video`, `short`, `channel`, `playlist`, `movie`, `under3`, `medium`, `long`, `live`, `hd`, `4k`, `subtitles` |
+| `suggest <partial query>` | Search suggestions |
 | `playlist <id> [pages]` | Playlist entries |
 | `watch <video id>` | Title, views, date, channel (subscribed?), likes, rating, comment count, description, chapters, related videos |
 | `comments <video id>` | First comments page and the replies of the first thread that has some |
 | `channel <channel id>` | Name, handle, subscribers, avatar, banner and every shelf |
+| `tab <channel id> videos\|shorts\|live\|playlists [pages]` | One channel tab (MWEB), following continuations; nothing when the channel has no such tab |
+| `chat <live video id> [polls]` | Live chat messages, polled as often as the server asks |
 | `avatar <channel or video id>` | Avatar URL (anonymous MWEB lookups; a video id is resolved to its uploader first) |
 | `accounts` | Profiles visible to the signed-in account |
 | `posts [channel id]` | Posts of subscribed channels as the home feed shows them, or one channel's posts tab |
