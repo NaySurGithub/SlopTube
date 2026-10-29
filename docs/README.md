@@ -8,6 +8,7 @@ with a real Google account, and draws a YouTube-like interface with Dear ImGui o
 | --- | --- |
 | [Building](building.md) | Toolchain, presets, packaging the APK and its icon, installing on a device, CI |
 | [Releasing](releasing.md) | Cutting a release, the release signing key, signing locally |
+| [Website](site.md) | The GitHub Pages site: what it is built from, building it locally |
 | [Architecture](architecture.md) | Source layout, threading model, frame loop, ownership rules |
 | [InnerTube API](innertube.md) | Endpoints, client profiles, parsed renderers, account actions |
 | [Authentication](authentication.md) | Google device sign-in, token refresh, multiple accounts |

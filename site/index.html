@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SlopTube · YouTube for Android, light and smooth</title>
+  <meta name="description" content="SlopTube is a free, lightweight YouTube client for Android written in C++: smooth on cheap phones, with background play, picture-in-picture, live chat and downloads.">
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="bar">
+    <a class="brand" href="index.html"><img src="logo.svg" alt="" width="32" height="32">SlopTube</a>
+    <nav class="links">
+      <a href="#features">Features</a>
+      <a href="#install">Install</a>
+      <a href="docs/index.html">Docs</a>
+      <a href="https://github.com/NaySurGithub/SlopTube">GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <img class="hero-logo" src="logo.svg" alt="SlopTube logo" width="120" height="120">
+      <h1>YouTube on Android, light and smooth.</h1>
+      <p class="lead">A free app written in C++ that stays fluid even on an inexpensive phone. Big,
+        clear buttons; videos keep playing with the screen off.</p>
+      <div id="download" class="download">
+        <a id="download-button" class="button primary" href="https://github.com/NaySurGithub/SlopTube/releases/latest">
+          <span class="button-label">Download for Android</span>
+          <span id="download-detail" class="button-detail">Latest version</span>
+        </a>
+        <p class="requirements">Android 11 or newer, 64-bit phone. Free and open source.</p>
+      </div>
+    </section>
+
+    <section class="screens" aria-label="Screenshots">
+      <figure><img src="screenshots/search.jpg" alt="Searching for a channel, with its videos below" loading="lazy" width="540" height="1104"><figcaption>Search</figcaption></figure>
+      <figure><img src="screenshots/watch.jpg" alt="A video playing, with its channel, actions and comments" loading="lazy" width="540" height="1104"><figcaption>Watch</figcaption></figure>
+      <figure><img src="screenshots/channel.jpg" alt="A channel page with its banner and shelves of videos" loading="lazy" width="540" height="1104"><figcaption>Channels</figcaption></figure>
+    </section>
+
+    <section id="features" class="features">
+      <h2>Everything you watch, nothing in the way</h2>
+      <div class="grid">
+        <article>
+          <h3>Plays in the background</h3>
+          <p>Lock the phone or open another app: the sound goes on, with controls on the lock
+            screen, your headphones and in the notification.</p>
+        </article>
+        <article>
+          <h3>Picture-in-picture</h3>
+          <p>Leave the app while a video plays and it shrinks into a small window you can move
+            anywhere.</p>
+        </article>
+        <article>
+          <h3>Easy to read and tap</h3>
+          <p>One setting makes all text and buttons bigger. It also follows the text size of your
+            phone, and errors are explained in plain words with a Retry button.</p>
+        </article>
+        <article>
+          <h3>Your account</h3>
+          <p>Sign in with Google to see your subscriptions, history and playlists, like, subscribe
+            and comment. Several accounts are supported.</p>
+        </article>
+        <article>
+          <h3>Live streams</h3>
+          <p>Watch live, rewind up to twelve hours, jump back to live in one tap, and read the
+            chat.</p>
+        </article>
+        <article>
+          <h3>Shorts</h3>
+          <p>Swipe through Shorts instantly: the next one is already loaded. Double tap to like.</p>
+        </article>
+        <article>
+          <h3>Downloads</h3>
+          <p>Save videos with their subtitles and watch them without a connection.</p>
+        </article>
+        <article>
+          <h3>Search that helps</h3>
+          <p>Suggestions as you type, your past searches, and filters for date, length, type, live
+            and quality.</p>
+        </article>
+        <article>
+          <h3>Fast on any phone</h3>
+          <p>No Kotlin, no heavy framework: native code and hardware video decoding, up to
+            1080p60. Nothing is redrawn when nothing moves.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="install" class="install">
+      <h2>Install in three steps</h2>
+      <ol class="steps">
+        <li>
+          <h3>Download</h3>
+          <p>Tap <strong>Download for Android</strong> above, on your phone.</p>
+        </li>
+        <li>
+          <h3>Open the file</h3>
+          <p>Open the downloaded <code>SlopTube</code> file. If your phone asks, allow installing
+            apps from this source (your browser or Files app), then tap <strong>Install</strong>.</p>
+        </li>
+        <li>
+          <h3>Watch</h3>
+          <p>Open SlopTube. Signing in is optional: tap your picture or <strong>You</strong> to use
+            your Google account.</p>
+        </li>
+      </ol>
+      <p class="note">Updates install over the previous version. Each release lists the file's
+        SHA-256 fingerprint to check the download.</p>
+    </section>
+
+    <section class="more">
+      <h2>For developers</h2>
+      <p>SlopTube is a <code>NativeActivity</code> in C++23 drawing its interface with Dear ImGui,
+        talking to YouTube through InnerTube. The documentation covers the architecture, the API,
+        the media pipeline and how to build it.</p>
+      <p class="actions">
+        <a class="button" href="docs/index.html">Read the documentation</a>
+        <a class="button" href="https://github.com/NaySurGithub/SlopTube">Source on GitHub</a>
+      </p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>SlopTube is free software under the GPL-3.0. Not an official YouTube product; not approved by
+      or associated with Google LLC or YouTube. YouTube's private API can change at any time.
+      Downloading videos may be against YouTube's Terms of Service: you are responsible for how you
+      use the app.</p>
+  </footer>
+  <script src="site.js"></script>
+</body>
+</html>

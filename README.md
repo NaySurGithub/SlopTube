@@ -62,7 +62,9 @@ without a copy.
 
 ## Downloads
 
-Signed APKs are published on the [releases page](https://github.com/NaySurGithub/SlopTube/releases).
+Download the app from the [website](https://naysurgithub.github.io/SlopTube/), which also has
+step-by-step install instructions. Signed APKs are published on the
+[releases page](https://github.com/NaySurGithub/SlopTube/releases).
 Every push to `main` also builds a debug-signed APK, available from the latest
 [CI run](https://github.com/NaySurGithub/SlopTube/actions/workflows/ci.yml). Both need Android 11
 or newer on a 64-bit ARM phone. The two are signed with different keys, so switching from one to
