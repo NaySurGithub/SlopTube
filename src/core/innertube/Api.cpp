@@ -342,6 +342,21 @@ Result<Page> Api::playlist(std::string_view playlistId) {
     return browse(browseId);
 }
 
+Result<Page> Api::mix(std::string_view playlistId) {
+    // Asked with the mix alone, `next` starts it: its "Up next" shelf is the queue.
+    auto body = openBody();
+    body.field("playlistId", playlistId);
+    auto root = checked(Endpoint::Next, kMetadataClient, std::move(body));
+    if (!root) {
+        return std::unexpected(root.error());
+    }
+    Page page = parser::mixQueue(*root);
+    if (page.items.empty()) {
+        return fail("mix: empty");
+    }
+    return page;
+}
+
 Result<Watch> Api::watch(std::string_view videoId) {
     auto body = openBody();
     body.field("videoId", videoId);

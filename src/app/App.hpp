@@ -388,6 +388,8 @@ private:
     // `recordHistory` is false.
     void openVideo(innertube::Item item, VideoSource source = {}, bool recordHistory = true);
     void playPrevious();
+    // A mix ("Radio") plays as a queue: its first video, then the others (innertube::isMix).
+    void openMix(const std::string& playlistId);
     // The item after the current video in the list it was opened from, else the first related
     // video.
     [[nodiscard]] std::optional<std::pair<innertube::Item, VideoSource>> nextVideo() const;

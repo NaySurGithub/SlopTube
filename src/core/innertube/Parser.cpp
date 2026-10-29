@@ -413,6 +413,24 @@ Page page(Element root) {
     return result;
 }
 
+Page mixQueue(Element root) {
+    Page result;
+    Element shelf;
+    if (root.at_pointer("/contents/singleColumnWatchNextResults/pivot/sectionListRenderer/"
+                        "contents/0/shelfRenderer")
+            .get(shelf)) {
+        return result;
+    }
+    json::forEachKey(shelf, "tileRenderer", [&](Element node) {
+        if (auto item = tile(node);
+            item && !item->id.empty() &&
+            (item->kind == ItemKind::Video || item->kind == ItemKind::Live)) {
+            result.items.push_back(std::move(*item));
+        }
+    });
+    return result;
+}
+
 Storyboard storyboard(std::string_view spec) {
     // "<base url>|<level 0>|<level 1>…", each level "w#h#count#columns#rows#interval#name#sigh";
     // the base URL holds "$L" (level) and "$N" (name, which may hold "$M", the sheet).

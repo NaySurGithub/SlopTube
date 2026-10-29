@@ -404,6 +404,10 @@ void App::openItem(Item item, VideoSource source) {
         openVideo(item, std::move(source));
         break;
     case ItemKind::Playlist: {
+        if (innertube::isMix(item.id)) {
+            openMix(item.id);
+            break;
+        }
         Screen screen{.route = Route::Playlist, .argument = item.id, .title = item.title};
         load(screen.feed, [this, id = item.id] { return m_api.playlist(id); });
         push(std::move(screen));
@@ -439,6 +443,24 @@ void App::openVideo(Item item, VideoSource source, bool recordHistory) {
     m_player.closeStandby(); // Only Shorts preload.
     m_shorts.standby.clear();
     startPlayback(id);
+}
+
+void App::openMix(const std::string& playlistId) {
+    // Its first video plays with the mix as the list it came from, so "next" and autoplay go on
+    // through the mix.
+    m_tasks.run([this, playlistId] {
+        auto queue = m_api.mix(playlistId);
+        m_tasks.post([this, queue = std::move(queue)]() mutable {
+            if (!queue) {
+                showToast(friendlyError(queue.error().message));
+                return;
+            }
+            auto feed = std::make_shared<Feed>();
+            feed->loaded = true;
+            feed->page = std::move(*queue);
+            openVideo(feed->page.items.front(), VideoSource{.feed = feed, .index = 0});
+        });
+    });
 }
 
 Result<innertube::Page> App::fetchWatch(const std::string& videoId) {

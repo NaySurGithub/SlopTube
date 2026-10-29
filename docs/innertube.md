@@ -191,6 +191,15 @@ own vote is unknown (anonymous reads), and `like/like` with `target.postId` is a
 success whatever the target (even a made-up id) without changing the public count, so the app
 shows a toast instead of pretending.
 
+## Mixes
+
+Feeds and suggestions carry mixes: playlists YouTube makes from a video, a channel or a genre
+(ids starting with `RD`; "Radio inspirée du titre", "Radios de genre" in French). They cannot be
+browsed as playlists (`browse VL<id>` answers "invalid argument"). `next` asked with the mix's
+`playlistId` alone starts it instead: the first shelf of its suggestions ("Up next") is the
+queue, 20 videos from the one playing (`Api::mix`, `parser::mixQueue`). The app plays the first
+with that queue as the list it came from, so "next" and autoplay go through the mix.
+
 ## Shorts feed
 
 The TV client ignores the Shorts filter of `search`: with an empty query it returns one page of

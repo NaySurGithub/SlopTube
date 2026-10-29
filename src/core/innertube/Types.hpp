@@ -115,6 +115,13 @@ enum class ChannelTab : std::uint8_t {
     Playlists,
 };
 
+// Mixes ("Radio" in some languages): endless playlists YouTube makes from a video, a channel or a
+// genre, whose ids start with "RD". They cannot be browsed like playlists; they play as a queue
+// (Api::mix).
+[[nodiscard]] constexpr bool isMix(std::string_view playlistId) {
+    return playlistId.starts_with("RD");
+}
+
 struct Page {
     std::vector<Item> items;
     std::string continuation; // Empty when there are no further pages.

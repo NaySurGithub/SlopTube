@@ -469,6 +469,9 @@ int run(std::span<const std::string_view> args) {
         return chat(api, argument, args.size() > 2 ? std::atoi(args[2].data()) : 1);
     }
     if (command == "playlist") {
+        if (innertube::isMix(argument)) {
+            return printPages(api, api.mix(argument), 1); // A queue, without further pages.
+        }
         return printPages(api, api.playlist(argument),
                           args.size() > 2 ? std::atoi(args[2].data()) : 1);
     }
