@@ -428,6 +428,11 @@ struct Player::Session {
         paused = startPaused;
         standby = startPaused;
         durationUs = info.details.durationSeconds * kMicrosPerSecond;
+        if (info.details.live && !streams.qualities.empty()) {
+            const innertube::Format& format = info.formats[streams.qualities.front().video];
+            segmentUs = format.segmentSeconds * kMicrosPerSecond;
+            dvrUs = format.dvrSeconds * kMicrosPerSecond;
+        }
     }
 
     ~Session() {
@@ -493,14 +498,85 @@ struct Player::Session {
     std::atomic<std::int64_t> seekRequestUs = -1;
     std::atomic<std::int64_t> durationUs = 0;
     std::atomic<AImageReader*> reader = nullptr; // Created by the decoder, deleted with us.
-    std::atomic<std::int64_t> clockBaseUs = -1;  // Timestamp of the first sample after a seek.
-    std::atomic<std::int64_t> anchorUs = 0;      // Position shown while the clock is stopped.
-    std::atomic<std::size_t> target;             // Quality selected most recently.
-    std::atomic<std::size_t> playing;            // Quality of the video stream being decoded.
+    std::atomic<int> videoWidth = 0;
+    std::atomic<int> videoHeight = 0;
+    std::atomic<std::int64_t> clockBaseUs = -1; // Timestamp of the first sample after a seek.
+    std::atomic<std::int64_t> anchorUs = 0;     // Position shown while the clock is stopped.
+    std::atomic<std::size_t> target;            // Quality selected most recently.
+    std::atomic<std::size_t> playing;           // Quality of the video stream being decoded.
     std::atomic<bool> stopRequested = false;
-    // Live: the segment audio is demuxed from and its start, where a quality switch begins.
-    std::atomic<std::int64_t> liveSequence = -1;
-    std::atomic<std::int64_t> liveSegmentUs = -1;
+    std::int64_t segmentUs = 0; // Live: media time of a segment.
+    std::int64_t dvrUs = 0;     // Live: how far behind the edge playback can go.
+    // Bumped by every live seek, so a quality switch prepared before it is not swapped in.
+    std::atomic<std::uint64_t> seekGeneration = 0;
+
+    // Live: the segment audio is demuxed from, and its start: where a quality switch begins.
+    void setLivePosition(std::int64_t sequence, std::int64_t startUs) {
+        const std::scoped_lock lock(liveMutex);
+        liveSequence = sequence;
+        liveSegmentUs = startUs;
+    }
+
+    [[nodiscard]] std::pair<std::int64_t, std::int64_t> livePosition() const {
+        const std::scoped_lock lock(liveMutex);
+        return {liveSequence, liveSegmentUs};
+    }
+
+    // Live: media time of segment 0, from the audio's current segment; nullopt until known.
+    // Segment n starts at offset + n * segmentUs, give or take half a second.
+    [[nodiscard]] std::optional<std::int64_t> liveOffsetUs() const {
+        const auto [sequence, startUs] = livePosition();
+        if (segmentUs <= 0 || sequence < 0 || startUs < 0) {
+            return std::nullopt;
+        }
+        return startUs - sequence * segmentUs;
+    }
+
+    // Live: the edge segment's sequence number now; it stops moving once the broadcast ended.
+    [[nodiscard]] std::optional<std::int64_t> edgeNow() const {
+        const std::scoped_lock lock(liveMutex);
+        if (segmentUs <= 0 || edgeSequence < 0) {
+            return std::nullopt;
+        }
+        return edgeAt(steadyMicros());
+    }
+
+    void learnEdge(std::int64_t edge) {
+        if (edge >= 0) {
+            const std::scoped_lock lock(liveMutex);
+            edgeLearnedUs = steadyMicros();
+            edgeSequence = edge;
+            edgeFrozen = false;
+        }
+    }
+
+    // The broadcast is over: the edge is where it was last.
+    void freezeEdge() {
+        const std::scoped_lock lock(liveMutex);
+        if (!edgeFrozen && edgeSequence >= 0 && segmentUs > 0) {
+            edgeSequence = edgeAt(steadyMicros());
+            edgeFrozen = true;
+        }
+    }
+
+    [[nodiscard]] std::int64_t edgeAt(std::int64_t nowUs) const { // Under liveMutex.
+        return edgeFrozen ? edgeSequence : edgeSequence + (nowUs - edgeLearnedUs) / segmentUs;
+    }
+
+    mutable std::mutex liveMutex;
+    std::int64_t liveSequence = -1;  // Under liveMutex.
+    std::int64_t liveSegmentUs = -1; // Under liveMutex.
+    // The edge segment when last learned, and when (steady clock, µs); it moves on by one segment
+    // every segmentUs. Under liveMutex.
+    std::int64_t edgeSequence = -1;
+    std::int64_t edgeLearnedUs = 0;
+    bool edgeFrozen = false;
+
+    static std::int64_t steadyMicros() {
+        return std::chrono::duration_cast<std::chrono::microseconds>(
+                   std::chrono::steady_clock::now().time_since_epoch())
+            .count();
+    }
 
     std::mutex sourcesMutex;
     std::vector<Source*> sources; // Every open source, cancelled on stop.
@@ -598,7 +674,7 @@ bool Player::promote(std::string_view videoId) {
     }
     close();
     m_session = std::move(m_standby);
-    m_session->audio.setSpeed(m_speed);
+    m_session->audio.setSpeed(m_session->info.details.live ? 1 : m_speed.load());
     m_session->setStandby(false);
     m_session->paused = false;
     m_failed = false;
@@ -629,7 +705,7 @@ std::unique_ptr<Player::Session> Player::start(innertube::Player info, bool paus
     const std::size_t quality = preferredQuality(streams, info);
     auto session = std::make_unique<Session>(std::move(info), std::move(streams), quality, paused);
     Session& running = *session;
-    running.audio.setSpeed(paused ? 1 : m_speed.load());
+    running.audio.setSpeed(paused || running.info.details.live ? 1 : m_speed.load());
     running.decoder = std::thread([this, &running] { decodeLoop(running); });
     if (running.streams.audio) {
         running.loader = std::thread([this, &running] { loaderLoop(running); });
@@ -667,15 +743,24 @@ void Player::setPaused(bool paused) {
 void Player::setSpeed(float speed) {
     m_speed = speed;
     if (m_session) {
-        m_session->audio.setSpeed(speed);
+        m_session->audio.setSpeed(m_session->info.details.live ? 1 : speed);
     }
 }
 
 void Player::seek(std::int64_t positionUs) {
-    if (!m_session || m_session->info.details.live) {
-        return; // Live streams play at the edge.
+    if (!m_session) {
+        return;
     }
-    const std::int64_t target = std::clamp<std::int64_t>(positionUs, 0, m_session->durationUs);
+    std::int64_t target = positionUs;
+    if (m_session->info.details.live) {
+        const auto window = liveWindow();
+        if (!window) {
+            return;
+        }
+        target = std::clamp(positionUs, window->startUs, window->edgeUs);
+    } else {
+        target = std::clamp<std::int64_t>(positionUs, 0, m_session->durationUs);
+    }
     m_session->seekRequestUs = target;
     m_session->anchorUs = target;
 }
@@ -700,6 +785,11 @@ std::int64_t Player::durationUs() const {
 
 AImageReader* Player::imageReader() const {
     return m_session ? m_session->reader.load() : nullptr;
+}
+
+std::pair<int, int> Player::videoSize() const {
+    return m_session ? std::pair{m_session->videoWidth.load(), m_session->videoHeight.load()}
+                     : std::pair{0, 0};
 }
 
 const innertube::VideoDetails* Player::details() const {
@@ -760,12 +850,39 @@ bool Player::live() const {
     return m_session && m_session->info.details.live;
 }
 
+std::optional<Player::LiveWindow> Player::liveWindow() const {
+    if (!live()) {
+        return std::nullopt;
+    }
+    const Session& session = *m_session;
+    const auto offset = session.liveOffsetUs();
+    const auto edge = session.edgeNow();
+    if (!offset || !edge) {
+        return std::nullopt;
+    }
+    // The edge is the end of its segment, as far as playback can go.
+    const std::int64_t edgeUs = *offset + (*edge + 1) * session.segmentUs;
+    // A margin from the oldest segment, which the server may drop at any moment.
+    constexpr std::int64_t kDvrMarginSegments = 2;
+    const std::int64_t startUs =
+        std::max(*offset, edgeUs - session.dvrUs + kDvrMarginSegments * session.segmentUs);
+    return LiveWindow{.startUs = std::min(startUs, edgeUs), .edgeUs = edgeUs};
+}
+
+void Player::setVideoHidden(bool hidden) {
+    m_videoHidden = hidden;
+    if (!hidden) {
+        m_repaint = true; // The last frame shown is from when the app was left.
+    }
+}
+
 std::unique_ptr<Player::Input> Player::openInput(const innertube::Format& format, Session& session,
-                                                 std::int64_t firstSegment) {
+                                                 std::int64_t firstSegment, bool seeking) {
     auto input =
         format.segmented()
             ? std::make_unique<Input>(
-                  session, std::make_unique<LiveSource>(m_http, format.url, firstSegment))
+                  session, std::make_unique<LiveSource>(m_http, format.url, firstSegment,
+                                                        seeking ? kLiveSeekMisses : kLiveMaxMisses))
             : std::make_unique<Input>(
                   session, std::make_unique<HttpSource>(m_http, format.url, format.contentLength,
                                                         format.bitrate, m_network));
@@ -799,13 +916,13 @@ void Player::loaderLoop(Session& session) {
         const innertube::Format& format =
             session.info.formats[session.streams.qualities[*quality].video];
         const std::int64_t positionUs = session.clockUs();
+        const std::uint64_t generation = session.seekGeneration;
         std::int64_t firstSegment = -1;
         if (format.segmented()) {
             // The segment holding the position: the audio's, or the one before when the audio
             // has already moved past the position.
-            const std::int64_t sequence = session.liveSequence;
-            firstSegment =
-                sequence >= 0 && positionUs < session.liveSegmentUs ? sequence - 1 : sequence;
+            const auto [sequence, startUs] = session.livePosition();
+            firstSegment = sequence >= 0 && positionUs < startUs ? sequence - 1 : sequence;
         }
         auto input = openInput(format, session, firstSegment);
         const auto track =
@@ -827,6 +944,9 @@ void Player::loaderLoop(Session& session) {
         const std::scoped_lock lock(session.switchMutex);
         if (session.requested) {
             session.retired.push_back(std::move(input)); // Superseded while loading.
+        } else if (generation != session.seekGeneration) {
+            session.retired.push_back(std::move(input)); // A live seek moved away: again.
+            session.requested = *quality;
         } else {
             session.retired.push_back(std::move(session.prepared));
             session.prepared = std::move(input);
@@ -864,10 +984,11 @@ void Player::decodeLoop(Session& session) {
         const FormatPtr format(
             AMediaExtractor_getTrackFormat(main->demuxer(), static_cast<std::size_t>(*track)));
         AImageReader* reader = nullptr;
-        AImageReader_newWithUsage(formatInt(format.get(), AMEDIAFORMAT_KEY_WIDTH),
-                                  formatInt(format.get(), AMEDIAFORMAT_KEY_HEIGHT),
-                                  AIMAGE_FORMAT_PRIVATE, AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE,
-                                  kReaderMaxImages, &reader);
+        session.videoWidth = formatInt(format.get(), AMEDIAFORMAT_KEY_WIDTH);
+        session.videoHeight = formatInt(format.get(), AMEDIAFORMAT_KEY_HEIGHT);
+        AImageReader_newWithUsage(session.videoWidth, session.videoHeight, AIMAGE_FORMAT_PRIVATE,
+                                  AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE, kReaderMaxImages,
+                                  &reader);
         if (reader != nullptr) {
             AImageReader_ImageListener listener{
                 .context = this,
@@ -890,8 +1011,9 @@ void Player::decodeLoop(Session& session) {
                            formatInt(format.get(), AMEDIAFORMAT_KEY_CHANNEL_COUNT));
         duration = std::max(duration, trackDuration(audioExtractor, *track));
         if (audioInput && audioInput->live) {
-            session.liveSegmentUs = AMediaExtractor_getSampleTime(audioExtractor);
-            session.liveSequence = audioInput->sequence;
+            session.setLivePosition(audioInput->sequence,
+                                    AMediaExtractor_getSampleTime(audioExtractor));
+            session.learnEdge(main->live->edge());
         }
     }
     if (!audio.active()) {
@@ -903,20 +1025,76 @@ void Player::decodeLoop(Session& session) {
     }
 
     const std::array<Track*, 2> tracks{&video, &audio};
+    // A live stream seeks by starting over at the segment holding `targetUs`, or near the edge;
+    // `targetUs` becomes where playback resumes. False when that segment cannot be had.
+    const auto restartLive = [&](std::int64_t& targetUs) {
+        const auto offset = session.liveOffsetUs();
+        const auto edge = session.edgeNow();
+        if (!offset || !edge || !audioInput) {
+            return false;
+        }
+        // Close enough to the edge plays from where a fresh start would: a few segments behind.
+        std::int64_t first = (targetUs - *offset) / session.segmentUs;
+        const bool toEdge = first >= *edge - kLiveStartBehindSegments;
+        if (toEdge) {
+            first = -1;
+        }
+        const innertube::Format& videoFormat =
+            session.info.formats[session.streams.qualities[session.playing].video];
+        auto videoStream = openInput(videoFormat, session, first, true);
+        auto audioStream = videoStream ? openInput(session.info.formats[*session.streams.audio],
+                                                   session, videoStream->sequence, true)
+                                       : nullptr;
+        if (!audioStream) {
+            return false;
+        }
+        for (Track* track : tracks) {
+            Input& input = track->extractor == main->demuxer() ? *videoStream : *audioStream;
+            if (track->active()) {
+                AMediaExtractor_selectTrack(input.demuxer(),
+                                            static_cast<std::size_t>(track->index));
+                track->extractor = input.demuxer();
+                input.startUs = AMediaExtractor_getSampleTime(input.demuxer());
+            }
+        }
+        {
+            // Their sources join their fetch threads when destroyed: the loader does that.
+            const std::scoped_lock lock(session.switchMutex);
+            session.retired.push_back(std::move(main));
+            session.retired.push_back(std::move(audioInput));
+            // A quality switch opened before the seek is at the old time: open it again here.
+            ++session.seekGeneration;
+            if (session.prepared) {
+                session.retired.push_back(std::move(session.prepared));
+                if (!session.requested) {
+                    session.requested = session.target.load();
+                }
+            }
+        }
+        session.switchChanged.notify_all();
+        main = std::move(videoStream);
+        audioInput = std::move(audioStream);
+        session.setLivePosition(audioInput->sequence, audioInput->startUs);
+        if (toEdge) {
+            session.learnEdge(main->live->edge());
+            targetUs = std::max<std::int64_t>(audioInput->startUs, 0); // Nothing to skip.
+        }
+        return true;
+    };
     // Moves one sample of `input` to its decoder. A live input first moves on to its next
     // segment once the current one is used up, and ends only with the broadcast.
     const auto pump = [&](Input& input) {
         if (input.exhausted()) {
             if (input.advance(tracks)) {
                 if (&input == audioInput.get()) {
-                    session.liveSegmentUs = input.startUs;
-                    session.liveSequence = input.sequence;
+                    session.setLivePosition(input.sequence, input.startUs);
                 }
                 return true;
             }
             if (!input.live->ended()) {
                 return false; // The next segment is still downloading.
             }
+            session.freezeEdge();
         }
         return feed(input.demuxer(), tracks);
     };
@@ -927,11 +1105,18 @@ void Player::decodeLoop(Session& session) {
     while (!session.stopRequested) {
         bool progressed = false;
 
-        if (const std::int64_t target = session.seekRequestUs.exchange(-1); target >= 0) {
-            AMediaExtractor_seekTo(main->demuxer(), target, AMEDIAEXTRACTOR_SEEK_PREVIOUS_SYNC);
-            if (audioInput) {
-                AMediaExtractor_seekTo(audioInput->demuxer(), target,
-                                       AMEDIAEXTRACTOR_SEEK_PREVIOUS_SYNC);
+        if (std::int64_t target = session.seekRequestUs.exchange(-1); target >= 0) {
+            if (main->live) {
+                // A live stream seeks by starting over at the segment holding the target.
+                if (!restartLive(target)) {
+                    continue; // Unreachable segment: playback goes on where it was.
+                }
+            } else {
+                AMediaExtractor_seekTo(main->demuxer(), target, AMEDIAEXTRACTOR_SEEK_PREVIOUS_SYNC);
+                if (audioInput) {
+                    AMediaExtractor_seekTo(audioInput->demuxer(), target,
+                                           AMEDIAEXTRACTOR_SEEK_PREVIOUS_SYNC);
+                }
             }
             for (Track* track : tracks) {
                 if (track->active()) {
@@ -1002,6 +1187,9 @@ void Player::decodeLoop(Session& session) {
             progressed = true;
         }
 
+        if (m_repaint.exchange(false)) {
+            firstFrameShown = false; // The next frame is shown at once, paused or not.
+        }
         const bool paused = session.paused;
         session.audio.setRunning(!paused && session.clockBaseUs >= 0);
 
@@ -1087,14 +1275,14 @@ void Player::decodeLoop(Session& session) {
                 video.drop();
                 progressed = true;
             } else if (!firstFrameShown) {
-                AMediaCodec_releaseOutputBuffer(videoCodec, index, true); // Poster frame.
+                AMediaCodec_releaseOutputBuffer(videoCodec, index, !m_videoHidden); // Poster.
                 video.pending.index = -1;
                 firstFrameShown = true;
             } else if (session.clockBaseUs >= 0) {
                 const std::int64_t clock = session.clockUs();
                 if (video.pending.presentationUs <= clock + kRenderAheadUs) {
                     const bool late = video.pending.presentationUs < clock - kLateDropUs;
-                    AMediaCodec_releaseOutputBuffer(videoCodec, index, !late);
+                    AMediaCodec_releaseOutputBuffer(videoCodec, index, !late && !m_videoHidden);
                     video.pending.index = -1;
                     progressed = true;
                 }

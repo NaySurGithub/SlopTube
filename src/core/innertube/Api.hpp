@@ -39,7 +39,9 @@ public:
     Api(const http::Client& http, auth::Session& session, Locale locale);
 
     [[nodiscard]] Result<Page> feed(Feed feed);
-    [[nodiscard]] Result<Page> search(std::string_view query);
+    [[nodiscard]] Result<Page> search(std::string_view query, const SearchFilters& filters = {});
+    // Completions of a partly typed query, best first (the suggestion service, not InnerTube).
+    [[nodiscard]] Result<std::vector<std::string>> searchSuggestions(std::string_view query);
     // Shorts picked for the signed-in account (or popular ones when signed out).
     [[nodiscard]] Result<Page> shorts();
     [[nodiscard]] Result<Page> playlist(std::string_view playlistId);
@@ -47,6 +49,9 @@ public:
     // First page from a Watch comments token, or the next page / replies from a Comment token.
     [[nodiscard]] Result<CommentPage> comments(std::string_view token);
     [[nodiscard]] Result<Channel> channel(std::string_view channelId);
+    // One tab of a channel, read anonymously through MWEB. Empty when the channel has no such
+    // tab (the server answers with the home tab instead).
+    [[nodiscard]] Result<Page> channelTab(std::string_view channelId, ChannelTab tab);
     // Avatar of any channel without signing in; cheap enough to resolve feed avatars lazily.
     [[nodiscard]] Result<std::string> channelAvatar(std::string_view channelId);
     // Uploader of a video, for feeds whose items do not link to it (one small anonymous request).
@@ -74,6 +79,12 @@ public:
     // channels first (those of the subscriptions feed, by latest activity), then the others.
     [[nodiscard]] Result<std::vector<Post>>
     subscriptionPosts(std::span<const std::string> preferred);
+
+    // Chat of a live stream: the first page's token is built from the ids, without the `next`
+    // response (only WEB's carries it, at about 760 KB). Read anonymously through TV.
+    [[nodiscard]] static std::string liveChatToken(std::string_view channelId,
+                                                   std::string_view videoId);
+    [[nodiscard]] Result<ChatPage> liveChat(std::string_view token);
 
     // Actions on the signed-in account.
     [[nodiscard]] Result<void> setSaved(std::string_view playlistId, std::string_view videoId,

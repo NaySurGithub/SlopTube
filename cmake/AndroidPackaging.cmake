@@ -1,6 +1,7 @@
 # Packages a native library into a signed APK without Gradle: aapt2 compiles the resources (the
-# launcher icon, generated from android/logo.svg) and links the manifest, the library is stored
-# uncompressed and page-aligned, then the archive is signed.
+# launcher icon, generated from android/logo.svg) and links the manifest, javac and d8 turn the
+# small Java bridge of android/java into classes.dex, the library is stored uncompressed and
+# page-aligned, then the archive is signed.
 #
 # Targets created: apk, apk-install, apk-run.
 
@@ -70,6 +71,19 @@ function(sloptube_add_apk library)
     set(aligned "${work}/aligned.apk")
     set(apk "${CMAKE_BINARY_DIR}/${SLOPTUBE_APP_NAME}.apk")
     set(lib_dir "${work}/lib/${ANDROID_ABI}")
+    set(java_dir "${work}/java")
+    set(classes_dir "${work}/classes")
+    set(dex_dir "${work}/dex")
+
+    # The Java sources are templates: their package is the application id.
+    file(REMOVE_RECURSE "${java_dir}")
+    file(GLOB java_templates CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/android/java/*.java.in")
+    set(java_sources)
+    foreach(template IN LISTS java_templates)
+        cmake_path(GET template STEM LAST_ONLY name)
+        configure_file("${template}" "${java_dir}/${name}" @ONLY)
+        list(APPEND java_sources "${java_dir}/${name}")
+    endforeach()
 
     configure_file("${PROJECT_SOURCE_DIR}/android/AndroidManifest.xml.in" "${manifest}" @ONLY)
     sloptube_configure_resources("${work}/res")
@@ -92,17 +106,25 @@ function(sloptube_add_apk library)
     add_custom_command(
         OUTPUT "${apk}"
         COMMAND ${CMAKE_COMMAND} -E rm -rf "${work}/lib" "${unsigned}" "${aligned}"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${lib_dir}"
+            "${classes_dir}" "${dex_dir}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${lib_dir}" "${classes_dir}" "${dex_dir}"
+        COMMAND "${java_bin}/javac" --release 11 -Xlint:all,-options -Werror -classpath
+            "${platform_jar}" -d "${classes_dir}" ${java_sources}
+        COMMAND "${java_bin}/jar" cf "${work}/classes.jar" -C "${classes_dir}" .
+        COMMAND ${CMAKE_COMMAND} -E env "PATH=${java_bin}:$ENV{PATH}"
+            "${build_tools}/d8" --release --min-api ${SLOPTUBE_ANDROID_MIN_SDK} --lib
+            "${platform_jar}" --output "${dex_dir}" "${work}/classes.jar"
         COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${library}>" "${lib_dir}/"
         COMMAND "${build_tools}/aapt2" compile --dir "${work}/res" -o "${resources}"
         COMMAND "${build_tools}/aapt2" link -o "${unsigned}" --manifest "${manifest}"
             -I "${platform_jar}" "${resources}"
         COMMAND ${CMAKE_COMMAND} -E chdir "${work}" "${SLOPTUBE_ZIP}" -q -0 -r "${unsigned}" lib
+        COMMAND ${CMAKE_COMMAND} -E chdir "${dex_dir}" "${SLOPTUBE_ZIP}" -q "${unsigned}" classes.dex
         COMMAND "${build_tools}/zipalign" -f -P 16 4 "${unsigned}" "${aligned}"
         COMMAND ${CMAKE_COMMAND} -E env "PATH=${java_bin}:$ENV{PATH}"
             "${build_tools}/apksigner" sign --ks "${SLOPTUBE_KEYSTORE}"
             --ks-pass "${SLOPTUBE_KEYSTORE_PASS}" --out "${apk}" "${aligned}"
-        DEPENDS ${library} "${manifest}" ${resource_files}
+        DEPENDS ${library} "${manifest}" ${resource_files} ${java_templates}
         COMMENT "Packaging ${SLOPTUBE_APP_NAME}.apk"
         VERBATIM)
     add_custom_target(apk ALL DEPENDS "${apk}")

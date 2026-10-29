@@ -1,5 +1,6 @@
 #include "app/platform/Platform.hpp"
 
+#include "app/platform/Bridge.hpp"
 #include "core/BuildInfo.hpp"
 
 #include <android/bitmap.h>
@@ -311,15 +312,15 @@ void Platform::share(std::string_view subject, std::string_view text) {
     const jmethodID putExtra = m_env->GetMethodID(
         intentClass, "putExtra", "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;");
     m_env->CallObjectMethod(intent, putExtra, m_env->NewStringUTF("android.intent.extra.SUBJECT"),
-                            m_env->NewStringUTF(std::string(subject).c_str()));
+                            javaString(m_env, subject));
     m_env->CallObjectMethod(intent, putExtra, m_env->NewStringUTF("android.intent.extra.TEXT"),
-                            m_env->NewStringUTF(std::string(text).c_str()));
+                            javaString(m_env, text));
     jobject chooser = m_env->CallStaticObjectMethod(
         intentClass,
         m_env->GetStaticMethodID(
             intentClass, "createChooser",
             "(Landroid/content/Intent;Ljava/lang/CharSequence;)Landroid/content/Intent;"),
-        intent, m_env->NewStringUTF(std::string(subject).c_str()));
+        intent, javaString(m_env, subject));
 
     jobject activity = m_app->activity->clazz;
     m_env->CallVoidMethod(
@@ -327,6 +328,41 @@ void Platform::share(std::string_view subject, std::string_view text) {
     if (m_env->ExceptionCheck()) {
         m_env->ExceptionClear();
     }
+}
+
+void Platform::updatePlayback(const Playback& playback) {
+    const LocalFrame frame(m_env);
+    jobject activity = m_app->activity->clazz;
+    m_env->CallVoidMethod(
+        activity,
+        method(m_env, activity, "updatePlayback",
+               "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JJZZFZZ)V"),
+        javaString(m_env, playback.videoId), javaString(m_env, playback.title),
+        javaString(m_env, playback.channel), static_cast<jlong>(playback.durationMs),
+        static_cast<jlong>(playback.positionMs), static_cast<jboolean>(playback.playing),
+        static_cast<jboolean>(playback.buffering), static_cast<jfloat>(playback.speed),
+        static_cast<jboolean>(playback.hasPrevious), static_cast<jboolean>(playback.hasNext));
+}
+
+void Platform::stopPlayback() {
+    const LocalFrame frame(m_env); // The app thread never returns to Java to free them.
+    jobject activity = m_app->activity->clazz;
+    m_env->CallVoidMethod(activity, method(m_env, activity, "stopPlayback", "()V"));
+}
+
+void Platform::setPictureInPicture(bool allowed, int width, int height) {
+    const LocalFrame frame(m_env); // The app thread never returns to Java to free them.
+    jobject activity = m_app->activity->clazz;
+    m_env->CallVoidMethod(activity, method(m_env, activity, "setPictureInPicture", "(ZII)V"),
+                          static_cast<jboolean>(allowed), static_cast<jint>(width),
+                          static_cast<jint>(height));
+}
+
+void Platform::setUploadNotifications(bool enabled) {
+    const LocalFrame frame(m_env); // The app thread never returns to Java to free them.
+    jobject activity = m_app->activity->clazz;
+    m_env->CallVoidMethod(activity, method(m_env, activity, "setUploadNotifications", "(Z)V"),
+                          static_cast<jboolean>(enabled));
 }
 
 innertube::Locale Platform::locale() const {

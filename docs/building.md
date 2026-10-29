@@ -8,7 +8,7 @@
 | Ninja | any | Generator used by every preset |
 | Android SDK | platform 35, build-tools 35.0.0 | `aapt2`, `zipalign`, `apksigner` |
 | Android NDK | r27 or newer | The newest installed NDK is picked automatically |
-| JDK | 17 | Only for `apksigner` and `keytool` |
+| JDK | 17 | `javac` and `jar` for the Java bridge, `apksigner`, `keytool` |
 | libcurl | system | Host builds only (the CLI) |
 
 The SDK is located through `ANDROID_HOME`, `ANDROID_SDK_ROOT`, the Homebrew
@@ -59,12 +59,15 @@ up by re-running the build; no CMake list needs editing.
 `cmake/AndroidPackaging.cmake` turns the shared library into an APK:
 
 1. `aapt2 compile` builds the resources and `aapt2 link` links them with
-   `android/AndroidManifest.xml.in` (a `NativeActivity` with `hasCode="false"`) against
-   `android.jar`.
-2. The library is stored uncompressed (`zip -0`) so it can be mapped directly
-   (`extractNativeLibs="false"`).
-3. `zipalign -P 16` aligns it for 16 KB page devices.
-4. `apksigner` signs with the debug keystore, or the release key for releases (see
+   `android/AndroidManifest.xml.in` (`SlopTubeActivity`, a `NativeActivity`, and the playback
+   service and upload job) against `android.jar`.
+2. The Java bridge (`android/java/*.java.in`, configured with the application id as package) is
+   compiled by `javac --release 11 -Werror` against `android.jar`, packed with `jar` and dexed by
+   `d8` into `classes.dex`.
+3. The library is stored uncompressed (`zip -0`) so it can be mapped directly
+   (`extractNativeLibs="false"`); `classes.dex` is added next to it.
+4. `zipalign -P 16` aligns it for 16 KB page devices.
+5. `apksigner` signs with the debug keystore, or the release key for releases (see
    [releasing.md](releasing.md)).
 
 ### Icon

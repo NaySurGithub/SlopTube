@@ -44,6 +44,9 @@ enum class Icon : std::uint8_t {
     Downloaded,
     CheckboxOff,
     CheckboxOn,
+    History,  // A clock: past searches.
+    Tune,     // Two sliders: search filters.
+    InsertUp, // An arrow to the top left: completes the query with a suggestion.
 };
 
 // Horizontal placement of wrapped text in its box. Natural follows the paragraph direction: left

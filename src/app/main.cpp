@@ -43,6 +43,9 @@ void handleCommand(android_app* native, std::int32_t command) {
     case APP_CMD_PAUSE:
         app->onPause();
         break;
+    case APP_CMD_STOP:
+        app->onStop();
+        break;
     default:
         break;
     }
@@ -65,7 +68,7 @@ void android_main(android_app* native) {
     while (native->destroyRequested == 0) {
         // Block until an event or wake-up unless an animation needs the next frame.
         const bool settling = Clock::now() < host.insetsSettleUntil;
-        int timeout = animating ? 0 : (settling ? kInsetsPollMs : -1);
+        int timeout = animating ? 0 : (settling ? kInsetsPollMs : app.idleWakeMs());
         while (true) {
             android_poll_source* source = nullptr;
             const int result =

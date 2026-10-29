@@ -1,8 +1,10 @@
 #pragma once
 
+#include "app/Settings.hpp"
 #include "app/downloads/Downloads.hpp"
 #include "app/media/Player.hpp"
 #include "app/media/VideoSurface.hpp"
+#include "app/platform/Bridge.hpp"
 #include "app/platform/Display.hpp"
 #include "app/platform/Platform.hpp"
 #include "app/ui/Avatars.hpp"
@@ -54,6 +56,7 @@ enum class Route : std::uint8_t {
     Channel,
     Post,
     Downloads,
+    Settings,
 };
 
 // Panels sliding up over part of the screen.
@@ -64,6 +67,7 @@ enum class Sheet : std::uint8_t {
     Accounts,
     Save,
     Download,
+    LiveChat,
 };
 
 // A paginated list of comments: a video's top-level comments or the replies to one.
@@ -99,12 +103,31 @@ struct ChannelPage {
     bool loading = true;
     std::string error;
     Scroller scroller;
+    // The tab shown under the header; none is the home tab and its shelves.
+    std::optional<innertube::ChannelTab> tab;
+    std::array<std::shared_ptr<Feed>, 4> tabs; // Loaded when first shown.
+    float headerHeight = 0;                    // Measured on the previous frame.
+    Scroller tabScroller{Axis::Horizontal};
+    float tabsWidth = 0; // Of the chip row, measured on the previous frame.
+};
+
+// The chat of the live stream being watched, polled while it is shown.
+struct LiveChat {
+    std::vector<innertube::ChatMessage> messages; // Oldest first, the newest few hundred.
+    std::string token;
+    double nextPollAt = 0;
+    bool polling = false;
+    bool failed = false;
+    Scroller scroller;
+    bool following = true; // Scrolled to the newest message, so new ones scroll it on.
 };
 
 // Panels opened from the player's controls.
 enum class PlayerMenu : std::uint8_t {
     None,
+    Settings, // Quality and playback speed.
     Quality,
+    Speed,
     Subtitles,
     Translations, // Languages to machine-translate subtitles into.
 };
@@ -162,7 +185,13 @@ public:
     void onWindowDestroyed();
     void onInsetsChanged();
     void onPause();
+    // The app left the screen (not for picture-in-picture).
+    void onStop();
     std::int32_t onInput(const AInputEvent* event);
+
+    // How long the event loop may sleep while idle: forever, unless something goes on unseen
+    // (playback in the background, an autoplay countdown); -1 for forever.
+    [[nodiscard]] int idleWakeMs() const;
 
     // Renders one frame; returns whether another should follow without waiting for events.
     bool frame();
@@ -206,7 +235,10 @@ private:
         Scroller descriptionScroller;
         float descriptionHeight = 0; // Measured on the previous frame.
         Scroller actionsScroller{Axis::Horizontal};
-        float actionsWidth = 0; // Measured on the previous frame.
+        float actionsWidth = 0;         // Measured on the previous frame.
+        double endedAt = -1;            // The video ended: the autoplay countdown runs from here.
+        bool autoplayCancelled = false; // The countdown was cancelled for this video.
+        std::shared_ptr<LiveChat> chat; // Live streams: shown in place of the comments teaser.
     };
 
     struct SheetState {
@@ -279,6 +311,53 @@ private:
         bool failed = false;
         std::shared_ptr<std::atomic<bool>> cancelled = std::make_shared<std::atomic<bool>>(false);
     };
+
+    // Background playback, media controls and picture-in-picture (Background.cpp).
+    void onBridgeEvent(BridgeEvent event);
+    // Publishes the playing video to the media session and picture-in-picture when it changed.
+    void syncPlayback();
+    // Plays the next video once one ends: after a countdown on screen, at once otherwise.
+    void updateAutoplay();
+    void playNext();
+    void drawAutoplay(Frame& frame, ImVec2 min, ImVec2 max);
+    // Picture-in-picture: only the video, filling the window.
+    void drawPictureInPicture(Frame& frame, ImVec2 display);
+    // Watching a video: the watch page or the mini player (not Shorts).
+    [[nodiscard]] bool watching() const;
+
+    // Settings (SettingsPage.cpp).
+    void openSettings();
+    void drawSettings(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max);
+    void applySettings();
+
+    // Search (SearchPage.cpp): suggestions and history while typing, filters over the results.
+    void submitSearch(Screen& screen, std::string query);
+    // submitSearch on the search screen, if it is still the one shown.
+    void searchFor(const std::string& query);
+    void requestSuggestions(const std::string& query);
+    void drawSearchSuggestions(Frame& frame, ImVec2 min, ImVec2 max);
+    [[nodiscard]] float drawSearchFilters(Frame& frame, Screen& screen, ImVec2 origin, float width);
+    void rememberSearch(const std::string& query);
+
+    // Live streams (LivePage.cpp): the chat, rewinding, going back to live.
+    void openLiveChat();
+    void pollLiveChat();
+    void drawLiveChat(Frame& frame, ImVec2 min, ImVec2 max);
+
+    // Where a live stream stands, in ms within what can be played; nullopt for other videos.
+    struct LiveTimeline {
+        std::int64_t durationMs = 0; // From the oldest playable moment to the edge.
+        std::int64_t playedMs = 0;
+        bool atEdge = true;
+    };
+
+    [[nodiscard]] std::optional<LiveTimeline> liveTimeline() const;
+    void seekLive(std::int64_t timelineMs);
+
+    // Channel tabs (ChannelPage.cpp).
+    void selectChannelTab(ChannelPage& page, std::optional<innertube::ChannelTab> tab);
+    [[nodiscard]] float drawChannelHeader(Frame& frame, const std::shared_ptr<ChannelPage>& page,
+                                          ImVec2 origin, float width);
 
     // Navigation.
     [[nodiscard]] bool canGoBack() const;
@@ -391,6 +470,8 @@ private:
     void drawFeed(Frame& frame, std::shared_ptr<Feed> feed, ItemStyle style, ImVec2 min, ImVec2 max,
                   const ListHeader& header = {}, std::span<const ListInsert> inserts = {});
     void drawScreen(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max);
+    // Everything but picture-in-picture: the screens, sheets, mini player and overlays.
+    void drawInterface(Frame& frame, ImVec2 min, ImVec2 max, ImVec2 display);
     [[nodiscard]] float drawWatchHeader(Frame& frame, ImVec2 origin, float width);
     void drawChannelRow(Frame& frame, innertube::ChannelSummary& channel, ImVec2 origin,
                         float width);
@@ -480,6 +561,13 @@ private:
     std::vector<Screen> m_stack;
     std::array<char, 256> m_query{};
     bool m_focusSearch = false;
+    std::vector<std::string> m_searchHistory; // Newest first.
+    std::vector<std::string> m_suggestions;
+    std::string m_suggestedFor;   // Query the suggestions shown complete.
+    std::string m_suggestPending; // Query being completed by a request in flight.
+    innertube::SearchFilters m_filters;
+    bool m_filtersOpen = false;
+    float m_searchFiltersHeight = 0; // Measured on the previous frame.
     WatchState m_watch;
     SignInState m_signIn;
     SheetState m_sheet;
@@ -509,6 +597,15 @@ private:
     bool m_usedFineSeek = false;  // Precise seeking was opened, so its hint is no longer shown.
     // Rotating to landscape enters fullscreen, until the user leaves it while still landscape.
     bool m_rotationEntersFullscreen = true;
+    float m_speed = 1; // Playback speed chosen in the player menu, kept across videos.
+
+    Settings m_settings;
+    bool m_onScreen = true;                        // The window exists: the app is visible.
+    bool m_pictureInPicture = false;               // Shown in a picture-in-picture window.
+    std::optional<Platform::Playback> m_published; // Last state given to the media session.
+    double m_publishedAt = 0;
+    bool m_pipAllowed = false;
+    std::pair<int, int> m_pipSize{};
     TaskQueue m_tasks; // Workers are joined before anything they reference is destroyed.
     // After the task queue it posts progress to, so its thread stops first.
     std::unique_ptr<Downloads> m_downloads;

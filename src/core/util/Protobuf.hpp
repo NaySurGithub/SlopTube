@@ -27,4 +27,7 @@ private:
 // URL-safe base64 with padding, as InnerTube encodes params.
 [[nodiscard]] std::string base64Url(std::string_view data);
 
+// Standard base64 with padding, as the search filter params are written.
+[[nodiscard]] std::string base64(std::string_view data);
+
 } // namespace sloptube::protobuf

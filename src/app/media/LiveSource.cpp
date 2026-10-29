@@ -19,14 +19,10 @@ constexpr std::string_view kSequenceParameter = "&sq=";
 // Every segment carries an emsg box whose text names its sequence number.
 constexpr std::string_view kSequenceField = "Sequence-Number: ";
 constexpr std::size_t kSequenceSearchBytes = 4096;
-// Playback starts this many segments behind the live edge, so the next one is always out before
-// it is needed (about 15 s with 5 s segments, as the official app).
-constexpr std::int64_t kStartBehindSegments = 3;
 constexpr std::ptrdiff_t kReadAheadSegments = 3;
 constexpr std::ptrdiff_t kBriefReadAheadSegments = 1;
 // A segment past the edge is held by the server until it exists, then sent; one asked for too
 // early is answered with no content. A stream that keeps failing has ended.
-constexpr int kMaxMisses = 10;
 constexpr auto kRetryDelay = 2s;
 
 std::int64_t sequenceOf(std::string_view segment) {
@@ -43,10 +39,11 @@ std::int64_t sequenceOf(std::string_view segment) {
 
 } // namespace
 
-LiveSource::LiveSource(const http::Client& http, std::string url, std::int64_t first)
+LiveSource::LiveSource(const http::Client& http, std::string url, std::int64_t first, int maxMisses)
     : m_http(http)
     , m_url(std::move(url))
-    , m_next(first) {
+    , m_next(first)
+    , m_maxMisses(maxMisses) {
     m_fetcher = std::thread([this] { fetchLoop(); });
 }
 
@@ -104,13 +101,14 @@ void LiveSource::fetchLoop() {
     if (m_next < 0) {
         const std::int64_t head = headSequence();
         if (head >= 0) {
-            m_next = std::max<std::int64_t>(head - kStartBehindSegments, 0);
+            m_edge = head;
+            m_next = std::max<std::int64_t>(head - kLiveStartBehindSegments, 0);
         } else {
             __android_log_print(ANDROID_LOG_ERROR, kLogTag, "live: no edge segment");
         }
     }
     int misses = 0;
-    while (m_next >= 0 && misses < kMaxMisses) {
+    while (m_next >= 0 && misses < m_maxMisses) {
         {
             std::unique_lock lock(m_mutex);
             m_changed.wait(lock, [&] {

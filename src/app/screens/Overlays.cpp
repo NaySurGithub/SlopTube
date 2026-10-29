@@ -106,6 +106,9 @@ void App::drawSheet(Frame& frame, ImVec2 min, ImVec2 max) {
     case Sheet::Download:
         drawDownloadSheet(frame, min, max);
         break;
+    case Sheet::LiveChat:
+        drawLiveChat(frame, min, max);
+        break;
     case Sheet::None:
         break;
     }

@@ -508,6 +508,53 @@ bool textRow(Frame& frame, std::string_view label, ImVec2 origin, float width) {
     return frame.touch.tapped(origin, max);
 }
 
+bool chipButton(Frame& frame, std::string_view label, ImVec2 origin, bool selected, float& x) {
+    const Canvas& c = frame.canvas;
+    const Canvas medium = c.with(Weight::Medium);
+    const float gutter = c.dp(theme::kGutter);
+    const float height = c.dp(theme::kChipHeight);
+    const float width = medium.measure(theme::kBodySize, label).x + gutter * 2;
+    const ImVec2 max{origin.x + width, origin.y + height};
+    c.rect(origin, max, selected ? theme::kTextPrimary : theme::kSurface, theme::kCornerRadius);
+    drawPressed(frame, origin, max, theme::kCornerRadius);
+    medium.text({origin.x + gutter, origin.y + (height - c.lineHeight(theme::kBodySize)) * 0.5f},
+                theme::kBodySize, selected ? theme::kTextOnLight : theme::kTextPrimary, label);
+    x += width + gutter * 0.75f;
+    return frame.touch.tapped(origin, max);
+}
+
+bool switchRow(Frame& frame, std::string_view label, std::string_view detail, ImVec2 origin,
+               float width, std::optional<bool> on) {
+    constexpr float kTrackWidth = 36; // dp, as Material switches.
+    constexpr float kTrackHeight = 20;
+    constexpr float kKnob = 7;
+    const Canvas& c = frame.canvas;
+    const float gutter = c.dp(theme::kGutter);
+    const float height = c.dp(kSettingRowHeight);
+    const ImVec2 max{origin.x + width, origin.y + height};
+    drawPressed(frame, origin, max);
+
+    const float trackWidth = on ? c.dp(kTrackWidth) + gutter : 0;
+    const float textWidth = width - gutter * 2 - trackWidth;
+    const float textHeight = c.lineHeight(theme::kBodySize) + c.lineHeight(theme::kCaptionSize);
+    const float textTop = origin.y + (height - textHeight) * 0.5f;
+    c.line({origin.x + gutter, textTop}, textWidth, theme::kBodySize, theme::kTextPrimary, label);
+    c.line({origin.x + gutter, textTop + c.lineHeight(theme::kBodySize)}, textWidth,
+           theme::kCaptionSize, theme::kTextSecondary, detail);
+
+    if (on) {
+        const float centerY = origin.y + height * 0.5f;
+        const ImVec2 trackMin{max.x - gutter - c.dp(kTrackWidth),
+                              centerY - c.dp(kTrackHeight) * 0.5f};
+        const ImVec2 trackMax{max.x - gutter, centerY + c.dp(kTrackHeight) * 0.5f};
+        c.rect(trackMin, trackMax, *on ? theme::kAccent : theme::kTrack, kTrackHeight * 0.5f);
+        const float knobX =
+            *on ? trackMax.x - c.dp(kTrackHeight) * 0.5f : trackMin.x + c.dp(kTrackHeight) * 0.5f;
+        c.list()->AddCircleFilled({knobX, centerY}, c.dp(kKnob), theme::kTextPrimary);
+    }
+    return frame.touch.tapped(origin, max);
+}
+
 bool drawFeedStatus(Frame& frame, const Feed& feed, ImVec2 min, ImVec2 max, ItemStyle style) {
     const Canvas& c = frame.canvas;
     const ImVec2 center{(min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f};

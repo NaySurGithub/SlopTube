@@ -30,21 +30,27 @@
 
 ## What is this?
 
-SlopTube is a native YouTube client for Android. There is no Java, no Kotlin and no Gradle: the
-whole app is a `NativeActivity` in C++. It talks to YouTube through InnerTube, the API behind the
+SlopTube is a native YouTube client for Android. There is no Kotlin and no Gradle: the app is a
+`NativeActivity` in C++, with a few hundred lines of Java only where Android delivers events to
+Java classes alone (the media session, the playback service, notifications). It talks to YouTube through InnerTube, the API behind the
 official apps, signs in with a real Google account and draws an interface close to the official
 app's with Dear ImGui on OpenGL ES. It is built to stay smooth on a low-end phone (Helio G80):
 nothing is drawn while nothing moves, and video goes from the hardware decoder to the screen
 without a copy.
 
 - **Feeds** - Home with Shorts shelves and community posts, Subscriptions, history, playlists,
-  search and channels
+  and channels with their Videos, Shorts, Live and Playlists tabs
+- **Search** - suggestions while typing, past searches, and filters (date, type, duration, live,
+  HD, 4K, subtitles, popularity)
 - **Account** - Google sign-in with a device code, several accounts, likes, subscriptions,
   comments and replies, saving to playlists
-- **Player** - hardware decoding up to 1080p60, quality choice, 2x speed while holding, seek
-  previews, chapters, precise seeking, seek undo, fullscreen with pinch to zoom, mini player, and
-  the official app's haptic feedback
-- **Live** - broadcasts in progress, at every quality, about 15 s behind the edge
+- **Player** - hardware decoding up to 1080p60, quality choice, playback speed, 2x while holding,
+  seek previews, chapters, precise seeking, seek undo, fullscreen with pinch to zoom, mini player,
+  autoplay, and the official app's haptic feedback
+- **Background** - playback goes on with the screen off or in other apps, with the media
+  notification, lock screen, headset and Bluetooth controls, and picture-in-picture
+- **Live** - broadcasts in progress at every quality, rewinding up to 12 hours, and the live chat
+- **Notifications** - new uploads of your subscriptions (opt-in, in Settings)
 - **Shorts** - vertical pager with the next short preloaded, so swiping is instant, and double
   tap to like
 - **Subtitles** - every track, with machine translation

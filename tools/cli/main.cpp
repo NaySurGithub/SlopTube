@@ -7,7 +7,9 @@
 #include "core/innertube/Api.hpp"
 #include "core/innertube/Captions.hpp"
 
+#include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <format>
@@ -30,6 +32,39 @@ constexpr std::array<std::pair<std::string_view, innertube::Feed>, 4> kFeedComma
     {"playlists", innertube::Feed::Playlists},
 }};
 
+// Words of `search <query> [filter...]`, applied in order.
+using FilterWord = std::pair<std::string_view, void (*)(innertube::SearchFilters&)>;
+constexpr std::array<FilterWord, 18> kFilterWords{{
+    {"popular", [](innertube::SearchFilters& f) { f.popular = true; }},
+    {"hour", [](innertube::SearchFilters& f) { f.date = innertube::UploadDate::LastHour; }},
+    {"today", [](innertube::SearchFilters& f) { f.date = innertube::UploadDate::Today; }},
+    {"week", [](innertube::SearchFilters& f) { f.date = innertube::UploadDate::ThisWeek; }},
+    {"month", [](innertube::SearchFilters& f) { f.date = innertube::UploadDate::ThisMonth; }},
+    {"year", [](innertube::SearchFilters& f) { f.date = innertube::UploadDate::ThisYear; }},
+    {"video", [](innertube::SearchFilters& f) { f.type = innertube::ResultType::Video; }},
+    {"short", [](innertube::SearchFilters& f) { f.type = innertube::ResultType::Short; }},
+    {"channel", [](innertube::SearchFilters& f) { f.type = innertube::ResultType::Channel; }},
+    {"playlist", [](innertube::SearchFilters& f) { f.type = innertube::ResultType::Playlist; }},
+    {"movie", [](innertube::SearchFilters& f) { f.type = innertube::ResultType::Movie; }},
+    {"under3",
+     [](innertube::SearchFilters& f) { f.duration = innertube::Duration::UnderThreeMinutes; }},
+    {"medium",
+     [](innertube::SearchFilters& f) { f.duration = innertube::Duration::ThreeToTwentyMinutes; }},
+    {"long",
+     [](innertube::SearchFilters& f) { f.duration = innertube::Duration::OverTwentyMinutes; }},
+    {"live", [](innertube::SearchFilters& f) { f.live = true; }},
+    {"hd", [](innertube::SearchFilters& f) { f.hd = true; }},
+    {"4k", [](innertube::SearchFilters& f) { f.fourK = true; }},
+    {"subtitles", [](innertube::SearchFilters& f) { f.subtitles = true; }},
+}};
+
+constexpr std::array<std::pair<std::string_view, innertube::ChannelTab>, 4> kTabNames{{
+    {"videos", innertube::ChannelTab::Videos},
+    {"shorts", innertube::ChannelTab::Shorts},
+    {"live", innertube::ChannelTab::Live},
+    {"playlists", innertube::ChannelTab::Playlists},
+}};
+
 std::filesystem::path sessionFile() {
     const char* home = std::getenv("HOME");
     return std::filesystem::path(home ? home : ".") / ".config" / build::kAppId / "session.json";
@@ -42,8 +77,11 @@ void usage() {
         "usage: sloptube-cli <command> [args]\n"
         "  login | logout\n"
         "  home | subs | history | playlists | shorts [pages]\n"
-        "  search <query> | playlist <id> [pages] | watch <video id> | comments <video id>\n"
-        "  channel <channel id> | avatar <channel id> | accounts\n"
+        "  search <query> [popular|hour|today|week|month|year|video|short|channel|playlist|\n"
+        "    movie|under3|medium|long|live|hd|4k|subtitles...] | suggest <partial query>\n"
+        "  playlist <id> [pages] | watch <video id> | comments <video id>\n"
+        "  channel <channel id> | tab <channel id> videos|shorts|live|playlists [pages]\n"
+        "  avatar <channel id> | accounts | chat <live video id> [polls]\n"
         "  posts [channel id] | post <channel id> [index]\n"
         "  player <video id> | captions <video id> [language [translate to]]",
         build::kAppName, build::kVersion);
@@ -311,6 +349,30 @@ int channel(innertube::Api& api, std::string_view channelId) {
     return EXIT_SUCCESS;
 }
 
+int chat(innertube::Api& api, std::string_view videoId, int polls) {
+    auto channelId = api.videoChannel(videoId);
+    if (!report(channelId)) {
+        return EXIT_FAILURE;
+    }
+    std::string token = innertube::Api::liveChatToken(*channelId, videoId);
+    for (int poll = 0; poll < polls && !token.empty(); ++poll) {
+        auto page = api.liveChat(token);
+        if (!report(page)) {
+            return EXIT_FAILURE;
+        }
+        for (const auto& message : page->messages) {
+            std::println("{}{}: {}", message.amount.empty() ? "" : "[" + message.amount + "] ",
+                         message.author, message.text);
+        }
+        std::println("-- {} messages, next in {} ms", page->messages.size(), page->pollMs);
+        token = page->continuation;
+        if (poll + 1 < polls) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(page->pollMs));
+        }
+    }
+    return EXIT_SUCCESS;
+}
+
 int run(std::span<const std::string_view> args) {
     if (args.empty()) {
         usage();
@@ -371,7 +433,40 @@ int run(std::span<const std::string_view> args) {
         return EXIT_FAILURE;
     }
     if (command == "search") {
-        return printPages(api, api.search(argument), 1);
+        innertube::SearchFilters filters;
+        for (const auto word : args.subspan(2)) {
+            const auto found = std::ranges::find(kFilterWords, word, &FilterWord::first);
+            if (found == kFilterWords.end()) {
+                usage();
+                return EXIT_FAILURE;
+            }
+            found->second(filters);
+        }
+        return printPages(api, api.search(argument, filters), 1);
+    }
+    if (command == "suggest") {
+        auto suggestions = api.searchSuggestions(argument);
+        if (!report(suggestions)) {
+            return EXIT_FAILURE;
+        }
+        for (const auto& suggestion : *suggestions) {
+            std::println("{}", suggestion);
+        }
+        return EXIT_SUCCESS;
+    }
+    if (command == "tab") {
+        const auto name = args.size() > 2 ? args[2] : std::string_view{};
+        const auto found =
+            std::ranges::find(kTabNames, name, &decltype(kTabNames)::value_type::first);
+        if (found == kTabNames.end()) {
+            usage();
+            return EXIT_FAILURE;
+        }
+        return printPages(api, api.channelTab(argument, found->second),
+                          args.size() > 3 ? std::atoi(args[3].data()) : 1);
+    }
+    if (command == "chat") {
+        return chat(api, argument, args.size() > 2 ? std::atoi(args[2].data()) : 1);
     }
     if (command == "playlist") {
         return printPages(api, api.playlist(argument),

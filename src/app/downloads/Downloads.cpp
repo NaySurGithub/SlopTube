@@ -1,6 +1,7 @@
 #include "app/downloads/Downloads.hpp"
 
 #include "app/media/Log.hpp"
+#include "app/util/Files.hpp"
 #include "app/util/TaskQueue.hpp"
 #include "core/http/Client.hpp"
 #include "core/innertube/Api.hpp"
@@ -34,28 +35,6 @@ constexpr std::size_t kMaxCaptionTracks = 12;
 std::string fileUrl(const fs::path& path) {
     // The "?" lets query parameters (a range, a caption format) be appended as usual.
     return std::string(http::kFileScheme) + path.string() + "?";
-}
-
-std::optional<std::string> readText(const fs::path& path) {
-    std::ifstream file(path, std::ios::binary);
-    if (!file) {
-        return std::nullopt;
-    }
-    return std::string(std::istreambuf_iterator<char>(file), {});
-}
-
-bool writeText(const fs::path& path, std::string_view text) {
-    const fs::path temporary = path.string() + ".tmp";
-    {
-        std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
-        file.write(text.data(), static_cast<std::streamsize>(text.size()));
-        if (!file) {
-            return false;
-        }
-    }
-    std::error_code error;
-    fs::rename(temporary, path, error);
-    return !error;
 }
 
 void writeFormat(json::Writer& out, std::string_view key, const innertube::Format& format) {

@@ -98,6 +98,14 @@ bool iconButton(Frame& frame, Icon icon, ImVec2 center, ImU32 color);
 bool pillButton(Frame& frame, std::string_view label, ImVec2 min, ImVec2 max, bool primary);
 // A section header with a chevron, opening the whole section.
 bool textRow(Frame& frame, std::string_view label, ImVec2 origin, float width);
+// A rounded chip at `origin`, filled white when selected (sort orders, filters, tabs); returns
+// whether it was tapped. Its width is added to `x` with the gap that follows it.
+bool chipButton(Frame& frame, std::string_view label, ImVec2 origin, bool selected, float& x);
+// A settings row: a label and its explanation, with a switch on the right unless `on` is
+// absent (an action); returns whether it was tapped. kSettingRowHeight tall.
+bool switchRow(Frame& frame, std::string_view label, std::string_view detail, ImVec2 origin,
+               float width, std::optional<bool> on);
+inline constexpr float kSettingRowHeight = 72; // dp
 
 // Centered status for empty, loading and failed feeds; returns whether "retry" was tapped.
 bool drawFeedStatus(Frame& frame, const Feed& feed, ImVec2 min, ImVec2 max,

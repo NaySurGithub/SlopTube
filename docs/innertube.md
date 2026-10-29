@@ -38,7 +38,10 @@ server assigned on the first response (keeping one visitor identity avoids bot c
 | `channel(id)` | `browse` | `browseId` = channel id | `channel` |
 | `channelAvatar(id)` | `browse` (MWEB) | `browseId` = channel id, `params` = the channel's search tab, empty `query` | `channelAvatar` |
 | `videoChannel(videoId)` | `player` (MWEB) | `videoId` | `videoChannel` |
-| `search(query)` | `search` | `query` | `page` |
+| `search(query, filters)` | `search` | `query`, `params` = the filters (see [Search](#search)) | `page` |
+| `searchSuggestions(query)` | not InnerTube: `suggestqueries-clients6.youtube.com/complete/search` | — | JSON array |
+| `channelTab(id, tab)` | `browse` (MWEB) | `browseId` = channel id, `params` = the tab's | `channelTab` (see [Channel tabs](#channel-tabs)) |
+| `liveChat(token)` | `live_chat/get_live_chat` | `continuation` | `liveChat` (see [Live chat](#live-chat)) |
 | `shorts()` | `search` | empty `query`, `params` = `EgIQCQ==` (type: Shorts) | `page`, shorts only (see [Shorts feed](#shorts-feed)) |
 | `continuation(shorts page)` | `reel/reel_watch_sequence` (MWEB), then `player` (MWEB) per short | `sequenceParams` | `reelSequence`, `videoDetails` |
 | `continuation(page)` | same endpoint as the page | `continuation` | `page`, appended with `appendPage` |
@@ -79,6 +82,56 @@ Searching the TV client for a channel id does not work: it returns unrelated cha
 
 Responses carrying an `error` object become a failed `Result` with the server's (localised)
 message.
+
+## Search
+
+Filters are the `params` of `search`, a protobuf as the web client's filter menu builds it:
+field 1 is the sort (3 = popularity; relevance is the default, and the menu no longer offers upload
+date or rating), field 2 a message of filters. TVHTML5 honours all of them, including Shorts with a
+real query; MWEB ignores some. The params are standard base64 (`protobuf::base64`).
+
+| Filter | Field | Values |
+| --- | --- | --- |
+| Upload date | 1 | 1 last hour, 2 today, 3 this week, 4 this month, 5 this year |
+| Type | 2 | 1 video, 9 short, 2 channel, 3 playlist, 4 movie |
+| Duration | 3 | 4 under 3 min, 5 3-20 min, 2 over 20 min |
+| Features | 4 HD, 5 subtitles, 8 live, 14 4K | 1 |
+
+Combinations work, and continuations keep the filters. Suggestions come from the service the
+official apps use, in plain JSON with `xhr=t` (`["query", [["suggestion", 0, [...]], ...], {...}]`),
+in the app's `hl`/`gl`, in about 0.1 s.
+
+## Channel tabs
+
+A channel's Videos, Shorts, Live and Playlists tabs are read anonymously through MWEB `browse`
+with fixed `params`, the same for every channel (`kChannelTabParams`). Asked for a tab it does not
+have, the server answers with the home tab, so `parser::channelTab` checks that the selected tab's
+URL ends with the tab's path (`/videos`, `/shorts`, `/streams`, `/playlists`) and returns nothing
+otherwise.
+
+| Tab | Items | Renderer |
+| --- | --- | --- |
+| Videos, Live | `richGridRenderer` → `richItemRenderer` | `videoWithContextRenderer`: `headline`, `lengthText`, `shortViewCountText`, `publishedTimeText`; a `thumbnailOverlayTimeStatusRenderer` of style `LIVE` marks a broadcast |
+| Shorts | same | `shortsLockupViewModel`: id from `reelWatchEndpoint`, views from `overlayMetadata`; the title only exists in `accessibilityText` ("title, views - action"), cut at its last separators |
+| Playlists | `sectionListRenderer` → `itemSectionRenderer` | `compactPlaylistRenderer`: `playlistId`, `title`, `videoCountShortText` |
+
+The next page's token is the `continuationItemRenderer` ending the list (header chips and the
+about panel carry other continuations, which are skipped); continuations go to the same endpoint
+(`Endpoint::ChannelTab`) and come back as `appendContinuationItemsAction`. Pages hold 30 items
+(48 shorts), 60-340 KB, in about 0.2 s. They do not name the channel; the app fills it in.
+
+## Live chat
+
+Only the WEB `next` response carries a live chat's token, at about 760 KB, so the app builds it
+from the channel and video ids (`Api::liveChatToken`, a protobuf whose fields decode the same as
+the web client's token), then polls `live_chat/get_live_chat` with the TV client, anonymously
+(MWEB and VISIONOS are refused). The first answer holds the latest 50-70 messages (about 100 KB),
+the next ones what arrived since (a few KB), every 3-5 s as `timedContinuationData.timeoutMs` says.
+
+`parser::liveChat` keeps `liveChatTextMessageRenderer` (author, photo, text runs, where a Unicode
+emoji run's `emojiId` is the character itself and a channel emoji shows as its shortcut) and
+`liveChatPaidMessageRenderer` (with `purchaseAmountText`); engagement notices, gifts and
+memberships are skipped.
 
 ## Renderers understood
 
