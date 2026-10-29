@@ -54,9 +54,11 @@ without a copy.
 
 ## Downloads
 
-There are no releases yet. Every push to `main` builds an APK, available from the latest
-[CI run](https://github.com/NaySurGithub/SlopTube/actions/workflows/ci.yml). It is signed with
-a debug key and needs Android 11 or newer on a 64-bit ARM phone.
+Signed APKs are published on the [releases page](https://github.com/NaySurGithub/SlopTube/releases).
+Every push to `main` also builds a debug-signed APK, available from the latest
+[CI run](https://github.com/NaySurGithub/SlopTube/actions/workflows/ci.yml). Both need Android 11
+or newer on a 64-bit ARM phone. The two are signed with different keys, so switching from one to
+the other needs an uninstall first.
 
 ## Building
 
