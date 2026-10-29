@@ -64,7 +64,8 @@ up by re-running the build; no CMake list needs editing.
 2. The library is stored uncompressed (`zip -0`) so it can be mapped directly
    (`extractNativeLibs="false"`).
 3. `zipalign -P 16` aligns it for 16 KB page devices.
-4. `apksigner` signs with the debug keystore.
+4. `apksigner` signs with the debug keystore, or the release key for releases (see
+   [releasing.md](releasing.md)).
 
 ### Icon
 
@@ -83,12 +84,13 @@ The version code is derived from the project version: `MAJOR * 10000 + MINOR * 1
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on every push to `main` and on pull requests:
+`.github/workflows/ci.yml` runs on every push to `main`, on `v*` tags and on pull requests:
 
 | Job | Runner | Checks |
 | --- | --- | --- |
 | Format | Ubuntu | `clang-format --dry-run --Werror` on `src/` and `tools/`, clang-format pinned in the workflow (`CLANG_FORMAT_VERSION`) |
 | CLI | macOS | `host-debug` preset |
-| Android APK | Ubuntu | `android-release` preset with NDK r27 and build-tools 35; the APK is uploaded as an artifact |
+| Android APK | Ubuntu | `android-release` preset with NDK r27 and build-tools 35; the APK is uploaded as an artifact; on a `v*` tag it is signed with the release key |
+| Release | Ubuntu | `v*` tags only: publishes the release-signed APK (see [releasing.md](releasing.md)) |
 
 Fetched dependencies are cached per hash of `cmake/Dependencies.cmake`.

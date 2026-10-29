@@ -7,7 +7,11 @@
 include(Logo)
 
 set(SLOPTUBE_BUILD_TOOLS_VERSION "35.0.0" CACHE STRING "Android build-tools version")
-set(SLOPTUBE_KEYSTORE "$ENV{HOME}/.android/debug.keystore" CACHE FILEPATH "APK signing keystore")
+set(debug_keystore "$ENV{HOME}/.android/debug.keystore")
+set(SLOPTUBE_KEYSTORE "${debug_keystore}" CACHE FILEPATH "APK signing keystore")
+# apksigner password spec: "pass:<password>", "env:<variable>" or "file:<path>". Releases read it
+# from the environment so it never lands in the build files.
+set(SLOPTUBE_KEYSTORE_PASS "pass:android" CACHE STRING "APK signing keystore password (apksigner spec)")
 
 set(build_tools "${SLOPTUBE_ANDROID_SDK}/build-tools/${SLOPTUBE_BUILD_TOOLS_VERSION}")
 set(platform_jar "${SLOPTUBE_ANDROID_SDK}/platforms/android-${SLOPTUBE_ANDROID_TARGET_SDK}/android.jar")
@@ -73,6 +77,9 @@ function(sloptube_add_apk library)
     file(GLOB_RECURSE resource_files "${work}/res/*")
 
     if(NOT EXISTS "${SLOPTUBE_KEYSTORE}")
+        if(NOT SLOPTUBE_KEYSTORE STREQUAL debug_keystore)
+            message(FATAL_ERROR "Signing keystore not found: ${SLOPTUBE_KEYSTORE}")
+        endif()
         cmake_path(GET SLOPTUBE_KEYSTORE PARENT_PATH keystore_dir)
         file(MAKE_DIRECTORY "${keystore_dir}")
         execute_process(
@@ -93,8 +100,8 @@ function(sloptube_add_apk library)
         COMMAND ${CMAKE_COMMAND} -E chdir "${work}" "${SLOPTUBE_ZIP}" -q -0 -r "${unsigned}" lib
         COMMAND "${build_tools}/zipalign" -f -P 16 4 "${unsigned}" "${aligned}"
         COMMAND ${CMAKE_COMMAND} -E env "PATH=${java_bin}:$ENV{PATH}"
-            "${build_tools}/apksigner" sign --ks "${SLOPTUBE_KEYSTORE}" --ks-pass pass:android
-            --out "${apk}" "${aligned}"
+            "${build_tools}/apksigner" sign --ks "${SLOPTUBE_KEYSTORE}"
+            --ks-pass "${SLOPTUBE_KEYSTORE_PASS}" --out "${apk}" "${aligned}"
         DEPENDS ${library} "${manifest}" ${resource_files}
         COMMENT "Packaging ${SLOPTUBE_APP_NAME}.apk"
         VERBATIM)
