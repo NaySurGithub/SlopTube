@@ -6,6 +6,7 @@
 #include "app/ui/Theme.hpp"
 #include "app/ui/Thumbnails.hpp"
 #include "app/ui/Touch.hpp"
+#include "core/http/Client.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -508,6 +509,22 @@ bool textRow(Frame& frame, std::string_view label, ImVec2 origin, float width) {
     return frame.touch.tapped(origin, max);
 }
 
+std::string_view friendlyError(std::string_view error) {
+    if (error.starts_with(http::kTransportError)) {
+        return tr(Text::NoConnection);
+    }
+    // The app's own messages start with a lowercase tag and a colon ("player: ...").
+    const auto colon = error.find(": ");
+    const bool technical =
+        colon != std::string_view::npos && colon > 0 && colon < 24 &&
+        std::ranges::all_of(
+            error.substr(0, colon),
+            [](char ch) {
+                return (ch >= 'a' && ch <= 'z') || ch == '_' || ch == '/' || ch == ' ';
+            });
+    return technical ? tr(Text::SomethingWentWrong) : error;
+}
+
 bool chipButton(Frame& frame, std::string_view label, ImVec2 origin, bool selected, float& x) {
     const Canvas& c = frame.canvas;
     const Canvas medium = c.with(Weight::Medium);
@@ -567,7 +584,8 @@ bool drawFeedStatus(Frame& frame, const Feed& feed, ImVec2 min, ImVec2 max, Item
     }
 
     const float width = std::min(c.dp(kStatusWidth), max.x - min.x);
-    const std::string_view message = feed.error.empty() ? tr(Text::Nothing) : feed.error;
+    const std::string_view message =
+        feed.error.empty() ? tr(Text::Nothing) : friendlyError(feed.error);
     const float textHeight =
         c.paragraph({center.x - width * 0.5f, center.y - c.dp(kIconTarget)}, width,
                     theme::kBodySize, theme::kTextSecondary, message, 4);

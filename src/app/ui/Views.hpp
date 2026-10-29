@@ -112,6 +112,11 @@ bool drawFeedStatus(Frame& frame, const Feed& feed, ImVec2 min, ImVec2 max,
                     ItemStyle style = ItemStyle::Card);
 
 [[nodiscard]] std::string formatDuration(std::int64_t seconds);
+
+// What to tell the user about `error`: the server's own explanation as it is (already in their
+// language), but a plain sentence instead of the app's technical messages ("http: ...",
+// "player: ...").
+[[nodiscard]] std::string_view friendlyError(std::string_view error);
 [[nodiscard]] std::string imageUrl(const innertube::Item& item);
 
 } // namespace sloptube::app

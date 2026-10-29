@@ -174,9 +174,7 @@ void App::drawMiniPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
         c.rect({windowMin.x, barTop}, {std::lerp(windowMin.x, windowMax.x, fraction), windowMax.y},
                theme::kAccent);
     }
-    if (state == media::PlayerState::Playing) {
-        frame.animating = true; // Progress bar.
-    }
+    // The bar moves with the video frames, which wake the loop themselves.
     if (state == media::PlayerState::Loading || m_player.buffering()) {
         c.spinner({(windowMin.x + windowMax.x) * 0.5f, (windowMin.y + windowMax.y) * 0.5f},
                   theme::kSpinnerSize, theme::kTextPrimary, frame.time);

@@ -3,6 +3,7 @@
 // animation runs, so an idle screen costs no CPU or GPU time.
 
 #include "app/App.hpp"
+#include "app/util/Guard.hpp"
 
 #include <android/looper.h>
 #include <android_native_app_glue.h>
@@ -24,7 +25,13 @@ struct Host {
     Clock::time_point insetsSettleUntil{};
 };
 
+void handleCommandUnguarded(android_app* native, std::int32_t command);
+
 void handleCommand(android_app* native, std::int32_t command) {
+    sloptube::app::guarded("lifecycle", [&] { handleCommandUnguarded(native, command); });
+}
+
+void handleCommandUnguarded(android_app* native, std::int32_t command) {
     auto& host = *static_cast<Host*>(native->userData);
     App* app = &host.app;
     switch (command) {
@@ -52,7 +59,10 @@ void handleCommand(android_app* native, std::int32_t command) {
 }
 
 std::int32_t handleInput(android_app* native, AInputEvent* event) {
-    return static_cast<Host*>(native->userData)->app.onInput(event);
+    std::int32_t handled = 0;
+    sloptube::app::guarded(
+        "input", [&] { handled = static_cast<Host*>(native->userData)->app.onInput(event); });
+    return handled;
 }
 
 } // namespace
@@ -86,7 +96,11 @@ void android_main(android_app* native) {
             app.onInsetsChanged();
         }
         if (native->destroyRequested == 0) {
-            animating = app.frame();
+            // A frame that fails is dropped, and the next one starts afresh.
+            if (!sloptube::app::guarded("frame", [&] { animating = app.frame(); })) {
+                app.abandonFrame();
+                animating = true;
+            }
         }
     }
     native->userData = nullptr;

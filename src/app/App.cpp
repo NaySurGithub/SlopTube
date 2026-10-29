@@ -158,27 +158,20 @@ App::App(android_app* native)
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;
     io.LogFilename = nullptr;
+    // A frame interrupted by an exception is recovered (abandonFrame), never stopped on.
+    io.ConfigErrorRecovery = true;
+    io.ConfigErrorRecoveryEnableAssert = false;
+    io.ConfigErrorRecoveryEnableTooltip = false;
 
-    const float baseSize = theme::kTitleSize * m_density;
-    m_fonts = loadFonts(*io.Fonts, baseSize, m_platform.locale().language,
+    // The interface size (Settings, and Android's text size) sets the density everything uses.
+    m_settings = Settings::load(m_platform.dataDirectory() / kSettingsFile);
+    applyScale();
+    // Glyphs are rasterised on demand at any size, so the fonts follow later scale changes.
+    m_fonts = loadFonts(*io.Fonts, theme::kTitleSize * m_density, m_platform.locale().language,
                         m_platform.locale().region, m_emoji);
-
-    ImGuiStyle& style = ImGui::GetStyle();
-    style.ScaleAllSizes(m_density);
-    style.FontSizeBase = baseSize;
-    style.FrameRounding = theme::kPillRadius * m_density;
-    style.FramePadding = {theme::kGutter * m_density, theme::kGutter * 0.5f * m_density};
-    style.Colors[ImGuiCol_FrameBg] = ImGui::ColorConvertU32ToFloat4(theme::kSurface);
-    style.Colors[ImGuiCol_FrameBgHovered] = style.Colors[ImGuiCol_FrameBg];
-    style.Colors[ImGuiCol_FrameBgActive] = style.Colors[ImGuiCol_FrameBg];
-    style.Colors[ImGuiCol_Text] = ImGui::ColorConvertU32ToFloat4(theme::kTextPrimary);
-    style.Colors[ImGuiCol_TextDisabled] = ImGui::ColorConvertU32ToFloat4(theme::kTextSecondary);
-    style.Colors[ImGuiCol_NavCursor] = {0, 0, 0, 0};
 
     m_thumbnails =
         std::make_unique<Thumbnails>(m_http, m_tasks, kThumbnailDecodeWidth, kThumbnailCapacity);
-    m_icons =
-        std::make_unique<VectorIcons>(static_cast<int>(std::lround(theme::kIconSize * m_density)));
     m_avatars =
         std::make_unique<Avatars>(m_api, m_tasks, m_platform.dataDirectory() / kAvatarCacheFile);
     m_videoSurface = std::make_unique<media::VideoSurface>(m_display.eglDisplay());
@@ -189,7 +182,6 @@ App::App(android_app* native)
                                               m_platform.dataDirectory() / kDownloadsDirectory);
     ImGui_ImplOpenGL3_Init("#version 300 es");
 
-    m_settings = Settings::load(m_platform.dataDirectory() / kSettingsFile);
     applySettings();
     if (auto history = readText(m_platform.dataDirectory() / kSearchHistoryFile)) {
         for (const auto line : std::views::split(*history, '\n')) {
@@ -219,6 +211,35 @@ App::~App() {
         ImGui_ImplAndroid_Shutdown();
     }
     ImGui::DestroyContext();
+}
+
+void App::applyScale() {
+    // Android's own text size counts too: whoever made the phone's text bigger wants this. Above
+    // the cap, a phone screen no longer holds the layouts.
+    constexpr float kMaxScale = 1.45f;
+    const float scale = std::clamp(kInterfaceScales[static_cast<std::size_t>(std::clamp(
+                                       m_settings.interfaceSize, 0, kInterfaceSizes - 1))] *
+                                       std::max(1.0f, m_platform.fontScale()),
+                                   1.0f, kMaxScale);
+    m_density = m_platform.density() * scale;
+    m_touch.setSlop(theme::kTouchSlop * m_density);
+
+    ImGuiStyle& style = ImGui::GetStyle();
+    style = ImGuiStyle();
+    ImGui::StyleColorsDark(&style);
+    style.ScaleAllSizes(m_density);
+    style.FontSizeBase = theme::kTitleSize * m_density;
+    style.FrameRounding = theme::kPillRadius * m_density;
+    style.FramePadding = {theme::kGutter * m_density, theme::kGutter * 0.5f * m_density};
+    style.Colors[ImGuiCol_FrameBg] = ImGui::ColorConvertU32ToFloat4(theme::kSurface);
+    style.Colors[ImGuiCol_FrameBgHovered] = style.Colors[ImGuiCol_FrameBg];
+    style.Colors[ImGuiCol_FrameBgActive] = style.Colors[ImGuiCol_FrameBg];
+    style.Colors[ImGuiCol_Text] = ImGui::ColorConvertU32ToFloat4(theme::kTextPrimary);
+    style.Colors[ImGuiCol_TextDisabled] = ImGui::ColorConvertU32ToFloat4(theme::kTextSecondary);
+    style.Colors[ImGuiCol_NavCursor] = {0, 0, 0, 0};
+    // The navigation icons are rasterised at their exact pixel size.
+    m_icons =
+        std::make_unique<VectorIcons>(static_cast<int>(std::lround(theme::kIconSize * m_density)));
 }
 
 void App::onWindowCreated(ANativeWindow* window) {
@@ -850,6 +871,7 @@ bool App::frame() {
     };
     const ImVec2 min{0, m_insets.top};
     const ImVec2 max{display.x, display.y - m_insets.bottom};
+    frame.animating |= m_thumbnails->uploading(); // Images still to upload, a few per frame.
     if (m_pictureInPicture) {
         drawPictureInPicture(frame, display);
     } else {
@@ -869,7 +891,18 @@ bool App::frame() {
 
     const bool typing = ImGui::GetIO().WantTextInput;
     m_platform.setKeyboardVisible(typing);
-    return frame.animating || m_touch.down() || typing;
+    m_typing = typing;
+    // ImGui hands queued input events out over several frames: keys typed in one burst.
+    const bool inputQueued = !ImGui::GetCurrentContext()->InputEventsQueue.empty();
+    return frame.animating || m_touch.down() || inputQueued;
+}
+
+void App::abandonFrame() {
+    const ImGuiContext* context = ImGui::GetCurrentContext();
+    if (context != nullptr && context->WithinFrameScope) {
+        ImGui::EndFrame(); // Error recovery pops what the interrupted frame left pushed.
+    }
+    m_touch.setBlocked(false);
 }
 
 void App::drawInterface(Frame& frame, ImVec2 min, ImVec2 max, ImVec2 display) {
@@ -1319,6 +1352,28 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
         list->PopClipRect();
         return;
     }
+    // A video that cannot play says so on the video itself, with a way to try again.
+    if (!m_watch.error.empty() || m_player.state() == media::PlayerState::Failed) {
+        const float gutter = c.dp(theme::kGutter);
+        const float centerY = (min.y + max.y) * 0.5f;
+        const float textHeight = c.paragraph(
+            {min.x + gutter * 2, centerY - c.dp(theme::kButtonHeight)}, max.x - min.x - gutter * 4,
+            theme::kBodySize, theme::kTextPrimary, tr(Text::CannotPlay), 2, TextAlign::Center);
+        const float button = c.measure(theme::kBodySize, tr(Text::Retry)).x + c.dp(40);
+        const ImVec2 buttonMin{(min.x + max.x - button) * 0.5f,
+                               centerY - c.dp(theme::kButtonHeight) + textHeight + gutter};
+        if (pillButton(frame, tr(Text::Retry), buttonMin,
+                       {buttonMin.x + button, buttonMin.y + c.dp(theme::kButtonHeight)}, true)) {
+            later([this] {
+                m_watch.error.clear();
+                m_videoSurface->release();
+                m_player.close();
+                startPlayback(m_watch.item.id);
+            });
+        }
+        list->PopClipRect();
+        return;
+    }
     // A live stream's bar spans what it keeps, up to its edge.
     const auto live = liveTimeline();
     const auto durationMs =
@@ -1572,9 +1627,7 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
         m_watch.controlsVisible = !m_watch.controlsVisible;
         m_watch.controlsShownAt = frame.time;
     }
-    if (m_watch.controlsVisible && playing) {
-        frame.animating = true; // Keep the clock and auto-hide ticking.
-    }
+    // While playing, video frames wake the loop: the clock and the auto-hide follow them.
 }
 
 bool App::holdForSpeed(Frame& frame, ImVec2 min, ImVec2 max, float pillTop) {

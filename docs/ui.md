@@ -35,7 +35,7 @@ All sizes are given in dp/sp and converted with the display density (`Canvas::dp
 | Shorts | `ShortsPage.cpp` (`drawShorts`) | Full-screen vertical pager: video, a right-hand column (like, dislike, comments, save, share; 60 dp apart, 28 dp icons with shadowed labels, as measured), channel and Subscribe, then the title on the bottom margin whatever its length (a tap opens the description sheet), progress bar; tap to pause (once no second tap can follow, 0.3 s); a double tap likes the short with a white thumb popping in a burst of rays (`drawLikeBurst`); hold for 2x. Dragging along the bottom seeks live (every 0.4 s, only when the position changed) with everything else hidden and a red bar with its handle, as in the official app, which has no storyboard there; it can be undone like the watch page's |
 | You | `App::drawYou`, `AccountPage.cpp` | Profile header with "Switch account", history shelf, "Downloads", playlists |
 | Search | `SearchPage.cpp` | Search field, card results (videos, playlists). A channel gets its own card, as on the official app: 72 dp avatar, name, handle and subscribers, and "Go to channel" (`drawChannelCard`). While the field has focus: past searches matching the text (clock icon, the last 30 kept in `searches.txt`), then suggestions; the arrow puts one in the field. With results, the filter button opens chips grouped as in the official filter menu (prioritize, upload date, type, duration, features), lit while a filter is on |
-| Settings | `SettingsPage.cpp` | From the gear in the home bar: background play, picture-in-picture, autoplay and upload notifications (`settings.json`), clearing the search history, the version |
+| Settings | `SettingsPage.cpp` | From the gear in the home bar: text and button size (Normal, Large 1.15x, Extra large 1.3x, multiplied by Android's own text size, up to 1.45x: the whole interface is drawn bigger, touch areas included, so layouts stay whole), background play, picture-in-picture, autoplay and upload notifications (`settings.json`), clearing the search history, the version |
 | Watch | `App::drawWatch`, `WatchPage.cpp` | The gear opens Quality and Playback speed. Player, title, views/date ("…more" opens the description), channel row with Subscribe, a sideways-scrolling action row (like/dislike pill, Share, Download with its progress, Save), comments teaser, related videos. Dragging along the progress bar (32 dp band, even with the controls hidden) shows the storyboard frame under the finger, dimmed, with a time pill 36 dp above the bar and the chapter title above it; the red fill stays at the playback position and the 20 dp handle follows the finger, as measured on the official app. The bar is split at chapters. Pulling up opens precise seeking, dragging after a 2x hold seeks, and a seek brought back to where playback was is cancelled (see [media.md](media.md#seeking)). A live stream shows a red dot and "LIVE" instead of the time, with no bar and no Download (see [media.md](media.md#live-streams)) |
 | Comments sheet | `WatchPage.cpp` | Top/Newest chips, comment field, comments with like/dislike/reply, "N replies" opening the replies view with its own field |
 | Description sheet | `WatchPage.cpp` | Title, likes/views/date figures, full description, channel row |
@@ -53,6 +53,13 @@ All sizes are given in dp/sp and converted with the display density (`Canvas::dp
 | Sign-in | `App::drawSignIn` | Device code and verification link |
 | Launch | `SplashScreen.cpp` | Over everything, touch blocked, until the home feed is in (see [animations.md](animations.md)) |
 | Playlist, History | `App::drawFeedScreen` | Row-style lists |
+
+## Errors
+
+Failures are told in plain words with a way out: the app's own technical messages ("http: ...",
+"player: ...") become "Something went wrong" or "No internet connection" (`friendlyError`), while
+the server's explanations, already in the user's language, are shown as they are. A video that
+cannot play says so over the player with a Retry button.
 
 ## Input rules
 

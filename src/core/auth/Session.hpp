@@ -4,6 +4,7 @@
 #include "core/util/Result.hpp"
 
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <filesystem>
 #include <mutex>
@@ -77,13 +78,24 @@ private:
     [[nodiscard]] Credentials* active();
 
     [[nodiscard]] Result<void> ensureClientCredentials();
-    [[nodiscard]] Result<void> refresh();
+
+    struct Token {
+        std::string accessToken;
+        std::int64_t expiresAt = 0; // Unix seconds.
+    };
+
+    // Exchanges a refresh token for an access token; touches no state, so it runs unlocked.
+    [[nodiscard]] Result<Token> requestToken(const std::string& clientId,
+                                             const std::string& clientSecret,
+                                             const std::string& refreshToken) const;
     void load();
     void save() const;
 
     const http::Client& m_http;
     std::filesystem::path m_storageFile;
     mutable std::mutex m_mutex;
+    std::condition_variable m_refreshDone;
+    bool m_refreshing = false; // Under m_mutex.
     Stored m_stored;
 };
 

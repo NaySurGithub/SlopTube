@@ -137,6 +137,14 @@ enum class Text : std::uint8_t {
     FilterHd,
     ClearFilters,
     LiveTab,
+    InterfaceSize,
+    InterfaceSizeDetail,
+    SizeNormal,
+    SizeLarge,
+    SizeExtraLarge,
+    NoConnection,
+    SomethingWentWrong,
+    CannotPlay,
     Count,
 };
 

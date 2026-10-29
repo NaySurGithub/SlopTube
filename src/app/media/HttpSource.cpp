@@ -1,5 +1,6 @@
 #include "app/media/HttpSource.hpp"
 
+#include "app/util/Guard.hpp"
 #include "core/http/Client.hpp"
 
 #include <algorithm>
@@ -63,7 +64,15 @@ HttpSource::HttpSource(const http::Client& http, std::string url, std::int64_t s
     });
     AMediaDataSource_setClose(m_dataSource, [](void*) {});
 
-    m_prefetcher = std::thread([this] { prefetchLoop(); });
+    m_prefetcher = std::thread([this] {
+        if (!guarded("http source", [this] { prefetchLoop(); })) {
+            {
+                const std::scoped_lock lock(m_mutex);
+                m_failed = true; // Reads fail instead of waiting forever.
+            }
+            m_changed.notify_all();
+        }
+    });
 }
 
 HttpSource::~HttpSource() {

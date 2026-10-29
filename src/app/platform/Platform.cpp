@@ -384,6 +384,23 @@ float Platform::density() const {
     return static_cast<float>(AConfiguration_getDensity(m_app->config)) / kBaselineDpi;
 }
 
+float Platform::fontScale() {
+    const LocalFrame frame(m_env);
+    jobject activity = m_app->activity->clazz;
+    jobject resources = m_env->CallObjectMethod(
+        activity, method(m_env, activity, "getResources", "()Landroid/content/res/Resources;"));
+    jobject configuration =
+        m_env->CallObjectMethod(resources, method(m_env, resources, "getConfiguration",
+                                                  "()Landroid/content/res/Configuration;"));
+    if (m_env->ExceptionCheck() || configuration == nullptr) {
+        m_env->ExceptionClear();
+        return 1;
+    }
+    const jfieldID field =
+        m_env->GetFieldID(m_env->GetObjectClass(configuration), "fontScale", "F");
+    return field != nullptr ? m_env->GetFloatField(configuration, field) : 1;
+}
+
 std::filesystem::path Platform::dataDirectory() const {
     return m_app->activity->internalDataPath;
 }

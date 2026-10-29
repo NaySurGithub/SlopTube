@@ -39,7 +39,7 @@ Only formats with a direct `url` are used; ciphered formats are skipped. A broad
 | Piece | Role |
 | --- | --- |
 | `HttpSource` | Ranged HTTP reads in 1 MB blocks with about 30 s of read-ahead (2–16 blocks); feeds the extractor through `AMediaDataSource`; measures bandwidth (shared across videos) |
-| `Player` | Separate video and audio sources and decoders. Audio is the clock and video frames are released against it. Seeks apply to both. Each opened video is a `Session` (streams, state, decoder threads, its own `AImageReader`); a second, standby session can be preloaded |
+| `Player` | Closing a video hands its session to a reaper thread, which joins the decoder (codec, sources, audio: tens of milliseconds) away from the UI; the next video's decoder waits for it, since phones have few hardware decoders. Separate video and audio sources and decoders. Audio is the clock and video frames are released against it. Seeks apply to both. Each opened video is a `Session` (streams, state, decoder threads, its own `AImageReader`); a second, standby session can be preloaded |
 | `VideoSurface` | `AImageReader` → `EGLImage` → `GL_TEXTURE_EXTERNAL_OES`, drawn by ImGui like any image (zero copy). Letterboxes the frame, optionally zoomed and cropped to the box (texture coordinates are cropped, nothing is drawn outside the box) |
 | `LiveSource` | The segments of a live stream, fetched in order a few ahead of the one being demuxed (see [Live streams](#live-streams)) |
 | `Log.hpp` | The single logcat tag |

@@ -3,6 +3,7 @@
 #include "app/media/LiveSource.hpp"
 #include "app/media/Log.hpp"
 #include "app/media/TimeStretch.hpp"
+#include "app/util/Guard.hpp"
 
 #include <aaudio/AAudio.h>
 #include <android/hardware_buffer.h>
@@ -17,6 +18,8 @@
 #include <cstring>
 #include <span>
 #include <string_view>
+#include <sys/resource.h>
+#include <unistd.h>
 #include <vector>
 
 namespace sloptube::app::media {
@@ -169,9 +172,17 @@ private:
                                                 std::int32_t frames) {
         auto& self = *static_cast<AudioOutput*>(user);
         // Underruns play silence and leave the clock where it is.
-        self.m_mediaFrames +=
-            self.m_stretch.render(static_cast<std::int16_t*>(audioData),
-                                  static_cast<std::size_t>(frames), self.m_speed, self.m_read);
+        const bool rendered = guarded("audio", [&] {
+            self.m_mediaFrames +=
+                self.m_stretch.render(static_cast<std::int16_t*>(audioData),
+                                      static_cast<std::size_t>(frames), self.m_speed, self.m_read);
+        });
+        if (!rendered) {
+            std::fill_n(static_cast<std::int16_t*>(audioData),
+                        static_cast<std::size_t>(frames) *
+                            static_cast<std::size_t>(self.m_channels),
+                        std::int16_t{0});
+        }
         self.m_consumedFrames = std::llround(self.m_mediaFrames);
         return AAUDIO_CALLBACK_RESULT_CONTINUE;
     }
@@ -653,6 +664,9 @@ Player::Player(const http::Client& http, std::function<void()> onFrame)
 Player::~Player() {
     close();
     closeStandby();
+    // Reapers use this player until their decoder has stopped.
+    std::unique_lock lock(m_reapMutex);
+    m_reaped.wait(lock, [&] { return m_reaping == 0; });
 }
 
 void Player::open(innertube::Player info, int screenLines) {
@@ -706,9 +720,14 @@ std::unique_ptr<Player::Session> Player::start(innertube::Player info, bool paus
     auto session = std::make_unique<Session>(std::move(info), std::move(streams), quality, paused);
     Session& running = *session;
     running.audio.setSpeed(paused || running.info.details.live ? 1 : m_speed.load());
-    running.decoder = std::thread([this, &running] { decodeLoop(running); });
+    running.decoder = std::thread([this, &running] {
+        if (!guarded("decoder", [&] { decodeLoop(running); })) {
+            running.state = PlayerState::Failed;
+        }
+    });
     if (running.streams.audio) {
-        running.loader = std::thread([this, &running] { loaderLoop(running); });
+        running.loader =
+            std::thread([this, &running] { guarded("loader", [&] { loaderLoop(running); }); });
     }
     return session;
 }
@@ -718,11 +737,24 @@ void Player::stopSession(std::unique_ptr<Session>& session) {
         return;
     }
     session->stop();
-    session->decoder.join();
-    if (session->loader.joinable()) {
-        session->loader.join();
+    {
+        const std::scoped_lock lock(m_reapMutex);
+        ++m_reaping;
+        m_reaped.notify_all(); // A decoder of this session waiting for reapers gives up.
     }
-    session.reset();
+    std::thread([this, dying = std::move(session)]() mutable {
+        guarded("reaper", [&] {
+            dying->decoder.join();
+            if (dying->loader.joinable()) {
+                dying->loader.join();
+            }
+            dying.reset();
+        });
+        // Notified under the lock: ~Player may destroy the condition right after.
+        const std::scoped_lock lock(m_reapMutex);
+        --m_reaping;
+        m_reaped.notify_all();
+    }).detach();
 }
 
 void Player::close() {
@@ -957,6 +989,19 @@ void Player::loaderLoop(Session& session) {
 }
 
 void Player::decodeLoop(Session& session) {
+    // The decoder also feeds the sound: a late wake-up is an audible gap
+    // (Process.THREAD_PRIORITY_AUDIO).
+    constexpr int kAudioPriority = -16;
+    setpriority(PRIO_PROCESS, static_cast<id_t>(gettid()), kAudioPriority);
+    {
+        // Hardware decoders are few: the ones of videos being closed go first.
+        std::unique_lock lock(m_reapMutex);
+        m_reaped.wait(lock, [&] { return m_reaping == 0 || session.stopRequested; });
+    }
+    if (session.stopRequested) {
+        session.state = PlayerState::Idle;
+        return;
+    }
     const innertube::Quality& initial = session.streams.qualities[session.quality];
     const innertube::Format& videoFormat = session.info.formats[initial.video];
     __android_log_print(ANDROID_LOG_INFO, kLogTag, "open %s itag %d %s", initial.label.c_str(),

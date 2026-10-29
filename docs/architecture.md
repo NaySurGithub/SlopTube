@@ -64,6 +64,9 @@ Java only on the main thread, through methods of the activity (`Platform`). Ever
 | Upload check | The background job's thread; uses its own HTTP client and session |
 | AAudio callback | Pulls decoded PCM from a lock-free ring |
 
+Priorities: the decoder (which also feeds the sound) runs at audio priority, the workers at
+background priority, so neither the network nor image decoding takes the CPU from drawing.
+
 Workers never touch UI state. A worker finishes by posting a closure to the main thread
 (`TaskQueue::post`), which wakes the looper; the closure runs at the start of the next frame.
 Closures capture `std::weak_ptr`s to the objects they update (feeds, comment lists, channel
@@ -78,7 +81,9 @@ to the queue, stops first.
 Rendering is on demand. `main.cpp` blocks in `ALooper_pollOnce(-1)` until an input event, a
 posted task or a decoded video frame wakes it. `App::frame()` returns whether another frame
 must follow immediately — while something animates, a list flings, a finger is down or the
-keyboard is open. An idle screen costs no CPU or GPU time. Without a window (playing in the
+keyboard is open. An idle screen costs no CPU or GPU time. A playing video redraws at its own
+frame rate (each decoded frame wakes the loop), never at the display's; a slow tick (250 ms)
+notices the end of playback, and an open keyboard wakes only for the caret's blink. Without a window (playing in the
 background), the loop wakes twice a second only to notice the end of the video for autoplay
 (`App::idleWakeMs`).
 
@@ -114,5 +119,12 @@ View tap ──later()──▶ App::openX() ──TaskQueue::run──▶ Api::
   `ClientProfile.cpp`, dependency versions in `cmake/Dependencies.cmake`, colours and sizes in
   `ui/Theme.hpp`, user-facing text in `ui/Strings.cpp`.
 - **No exceptions, no RTTI.** Errors travel as `Result<T>` (`std::expected<T, Error>`).
+- **Nothing ends the app.** The standard library can still throw (memory, files, formatting), so
+  every boundary where an exception would end the process catches it, logs it and goes on
+  (`util/Guard.hpp`): worker and main-thread tasks, the decoder, loader, source, download and
+  reaper threads, the audio callback (which then plays silence), JNI entry points, lifecycle and
+  input callbacks, and the frame (an interrupted ImGui frame is closed by its error recovery and
+  the next one starts afresh). On the Java side, a foreground service Android refuses to start
+  costs the notification, not the app.
 - **Optimistic actions.** Likes, subscriptions and comments update the UI immediately and are
   reverted, with a toast, when the request fails.

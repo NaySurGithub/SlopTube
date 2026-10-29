@@ -3,6 +3,8 @@
 #include "app/util/Files.hpp"
 #include "core/json/Json.hpp"
 
+#include <algorithm>
+
 namespace sloptube::app {
 
 Settings Settings::load(const std::filesystem::path& file) {
@@ -25,6 +27,8 @@ Settings Settings::load(const std::filesystem::path& file) {
     read("/pictureInPicture", settings.pictureInPicture);
     read("/autoplay", settings.autoplay);
     read("/uploadNotifications", settings.uploadNotifications);
+    settings.interfaceSize = static_cast<int>(
+        std::clamp<std::int64_t>(json::integer(*root, "/interfaceSize"), 0, kInterfaceSizes - 1));
     return settings;
 }
 
@@ -35,6 +39,7 @@ void Settings::save(const std::filesystem::path& file) const {
         .field("pictureInPicture", pictureInPicture)
         .field("autoplay", autoplay)
         .field("uploadNotifications", uploadNotifications)
+        .field("interfaceSize", static_cast<std::int64_t>(interfaceSize))
         .endObject();
     writeText(file, out.take());
 }

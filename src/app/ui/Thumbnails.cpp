@@ -9,6 +9,14 @@
 #include <vector>
 
 namespace sloptube::app {
+
+// An image decoded on a worker, waiting for its upload on the UI thread.
+struct Decoded {
+    std::vector<std::uint8_t> pixels;
+    int width = 0;
+    int height = 0;
+};
+
 namespace {
 
 // 480x360 frame that every video has; the 16:9 picture sits inside its letterbox.
@@ -21,11 +29,8 @@ constexpr std::string_view kAvatarSizeMarker = "=s";
 // Requests not drawn for this many frames are abandoned (scrolled past during a fling).
 constexpr std::uint64_t kAbandonAfterFrames = 30;
 
-struct Decoded {
-    std::vector<std::uint8_t> pixels;
-    int width = 0;
-    int height = 0;
-};
+// Texture uploads per frame: about 1 ms each for a 480x360 thumbnail on the target phone.
+constexpr int kUploadsPerFrame = 2;
 
 bool decode(const std::string& encoded, int maxWidth, Decoded& out) {
     AImageDecoder* decoder = nullptr;
@@ -89,6 +94,17 @@ Thumbnails::~Thumbnails() {
 
 void Thumbnails::beginFrame() {
     ++m_frame;
+    // The images on screen most recently first, a couple per frame.
+    for (int uploaded = 0; uploaded < kUploadsPerFrame && !m_decoded.empty(); ++uploaded) {
+        const auto lastUsed = [&](const auto& pending) {
+            const auto entry = m_entries.find(pending.first);
+            return entry == m_entries.end() ? 0 : entry->second.lastUsedFrame;
+        };
+        const auto next = std::ranges::max_element(
+            m_decoded, [&](const auto& a, const auto& b) { return lastUsed(a) < lastUsed(b); });
+        upload(next->first, *next->second);
+        m_decoded.erase(next);
+    }
     for (auto& [url, entry] : m_entries) {
         if (entry.texture.id == 0 && m_frame - entry.lastUsedFrame > kAbandonAfterFrames) {
             entry.cancelled->store(true);
@@ -125,29 +141,32 @@ const Texture* Thumbnails::get(const std::string& url, int maxWidth) {
             return;
         }
         tasks.post([this, url, alive, decoded] {
-            if (alive.expired()) {
-                return;
+            if (!alive.expired()) {
+                m_decoded.emplace_back(url, decoded);
             }
-            // The entry may have been abandoned and re-requested, and the retry already landed.
-            const auto target = m_entries.find(url);
-            if (target == m_entries.end() || target->second.texture.id != 0) {
-                return;
-            }
-            Texture& texture = target->second.texture;
-            glGenTextures(1, &texture.id);
-            glBindTexture(GL_TEXTURE_2D, texture.id);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, decoded->width, decoded->height, 0, GL_RGBA,
-                         GL_UNSIGNED_BYTE, decoded->pixels.data());
-            texture.width = decoded->width;
-            texture.height = decoded->height;
-            texture.readyAt = std::chrono::steady_clock::now();
         });
     });
     return nullptr;
+}
+
+void Thumbnails::upload(const std::string& url, const Decoded& decoded) {
+    // The entry may have been abandoned and re-requested, and the retry already landed.
+    const auto target = m_entries.find(url);
+    if (target == m_entries.end() || target->second.texture.id != 0) {
+        return;
+    }
+    Texture& texture = target->second.texture;
+    glGenTextures(1, &texture.id);
+    glBindTexture(GL_TEXTURE_2D, texture.id);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, decoded.width, decoded.height, 0, GL_RGBA,
+                 GL_UNSIGNED_BYTE, decoded.pixels.data());
+    texture.width = decoded.width;
+    texture.height = decoded.height;
+    texture.readyAt = std::chrono::steady_clock::now();
 }
 
 void Thumbnails::evict() {

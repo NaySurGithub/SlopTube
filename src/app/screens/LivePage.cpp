@@ -90,8 +90,12 @@ void App::pollLiveChat() {
                 chat->messages.push_back(std::move(message));
             }
             if (chat->messages.size() > kChatKept) {
+                const std::size_t dropped = chat->messages.size() - kChatKept;
                 chat->messages.erase(chat->messages.begin(),
-                                     chat->messages.end() - static_cast<std::ptrdiff_t>(kChatKept));
+                                     chat->messages.begin() + static_cast<std::ptrdiff_t>(dropped));
+                chat->heights.erase(chat->heights.begin(),
+                                    chat->heights.begin() + static_cast<std::ptrdiff_t>(std::min(
+                                                                dropped, chat->heights.size())));
             }
             chat->token = std::move(page->continuation);
             chat->nextPollAt =
@@ -129,17 +133,22 @@ void App::drawLiveChat(Frame& frame, ImVec2 min, ImVec2 max) {
     const float textX = min.x + gutter * 1.5f + avatar;
     const float textWidth = max.x - gutter - textX;
     const float spacing = c.dp(kChatSpacing);
-    std::vector<float> heights;
-    heights.reserve(chat->messages.size());
-    float content = spacing;
-    for (const auto& message : chat->messages) {
-        const int lines =
-            std::max(1, c.lineCount(textWidth, theme::kBodySize, message.text, kChatMessageLines));
-        const float height =
+    // Messages are measured once, when they arrive (or when the width changes).
+    std::vector<float>& heights = chat->heights;
+    if (chat->measuredWidth != textWidth) {
+        heights.clear();
+        chat->measuredWidth = textWidth;
+    }
+    for (std::size_t i = heights.size(); i < chat->messages.size(); ++i) {
+        const int lines = std::max(
+            1, c.lineCount(textWidth, theme::kBodySize, chat->messages[i].text, kChatMessageLines));
+        heights.push_back(
             std::max(avatar, c.lineHeight(theme::kCaptionSize) +
                                  c.lineHeight(theme::kBodySize) * static_cast<float>(lines)) +
-            spacing;
-        heights.push_back(height);
+            spacing);
+    }
+    float content = spacing;
+    for (const float height : heights) {
         content += height;
     }
     if (chat->following) {

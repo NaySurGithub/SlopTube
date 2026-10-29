@@ -170,6 +170,20 @@ constexpr std::array<Translation, std::to_underlying(Text::Count)> kTranslations
     {Text::FilterHd, {"HD", "HD"}},
     {Text::ClearFilters, {"Clear filters", "Effacer les filtres"}},
     {Text::LiveTab, {"Live", "En direct"}},
+    {Text::InterfaceSize, {"Text and button size", "Taille du texte et des boutons"}},
+    {Text::InterfaceSizeDetail,
+     {"Makes everything bigger and easier to tap",
+      "Agrandit tout pour lire et toucher plus facilement"}},
+    {Text::SizeNormal, {"Normal", "Normale"}},
+    {Text::SizeLarge, {"Large", "Grande"}},
+    {Text::SizeExtraLarge, {"Extra large", "Très grande"}},
+    {Text::NoConnection,
+     {"No internet connection. Check Wi-Fi or mobile data, then try again.",
+      "Pas de connexion Internet. Vérifiez le Wi-Fi ou les données mobiles, puis réessayez."}},
+    {Text::SomethingWentWrong,
+     {"Something went wrong. Please try again.", "Un problème est survenu. Veuillez réessayer."}},
+    {Text::CannotPlay,
+     {"This video can't be played right now.", "Impossible de lire cette vidéo pour le moment."}},
 }};
 
 // Catch a missing or misordered row at compile time rather than showing the wrong text.

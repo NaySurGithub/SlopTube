@@ -2,6 +2,7 @@
 
 #include "app/media/Log.hpp"
 #include "app/util/Files.hpp"
+#include "app/util/Guard.hpp"
 #include "app/util/TaskQueue.hpp"
 #include "core/http/Client.hpp"
 #include "core/innertube/Api.hpp"
@@ -86,7 +87,7 @@ Downloads::Downloads(const http::Client& http, innertube::Api& api, TaskQueue& t
     std::error_code error;
     fs::create_directories(m_root, error);
     load();
-    m_thread = std::thread([this] { workerLoop(); });
+    m_thread = std::thread([this] { guarded("downloads", [this] { workerLoop(); }); });
 }
 
 Downloads::~Downloads() {

@@ -122,7 +122,9 @@ private:
     [[nodiscard]] std::size_t preferredQuality(const innertube::Streams& streams,
                                                const innertube::Player& info) const;
     [[nodiscard]] std::unique_ptr<Session> start(innertube::Player info, bool paused);
-    static void stopSession(std::unique_ptr<Session>& session);
+    // Stops `session` and leaves its teardown (joining the decoder: codec, sources, audio; tens
+    // of milliseconds) to a reaper thread, so the UI never waits on it.
+    void stopSession(std::unique_ptr<Session>& session);
     void decodeLoop(Session& session);
     void loaderLoop(Session& session);
     // `firstSegment` is where a live stream starts; negative for near the live edge. A live seek
@@ -145,6 +147,11 @@ private:
 
     std::unique_ptr<Session> m_session;
     std::unique_ptr<Session> m_standby;
+
+    // Sessions being torn down. A new decoder waits for them: phones have few hardware decoders.
+    std::mutex m_reapMutex;
+    std::condition_variable m_reaped;
+    int m_reaping = 0; // Under m_reapMutex.
 };
 
 } // namespace sloptube::app::media

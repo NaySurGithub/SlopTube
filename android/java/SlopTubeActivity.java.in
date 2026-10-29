@@ -155,19 +155,35 @@ public final class SlopTubeActivity extends NativeActivity {
         state.speed = speed;
         state.hasPrevious = hasPrevious;
         state.hasNext = hasNext;
-        runOnUiThread(() -> PlaybackService.update(this, state));
+        runOnUiThread(() -> {
+            try {
+                PlaybackService.update(this, state);
+            } catch (RuntimeException failed) {
+                // The notification is lost, not playback.
+            }
+        });
     }
 
     // No video is open any more.
     public void stopPlayback() {
-        runOnUiThread(() -> PlaybackService.stop(this));
+        runOnUiThread(() -> {
+            try {
+                PlaybackService.stop(this);
+            } catch (RuntimeException failed) {
+                // Already gone.
+            }
+        });
     }
 
     // --- Upload notifications -------------------------------------------------------------------
 
     public void setUploadNotifications(final boolean enabled) {
         runOnUiThread(() -> {
-            UploadsJob.schedule(this, enabled);
+            try {
+                UploadsJob.schedule(this, enabled);
+            } catch (RuntimeException failed) {
+                return; // The scheduler refused: no notifications this time.
+            }
             if (enabled && Build.VERSION.SDK_INT >= 33
                     && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                             != PackageManager.PERMISSION_GRANTED) {
