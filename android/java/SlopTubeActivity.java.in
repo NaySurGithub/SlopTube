@@ -30,11 +30,6 @@ public final class SlopTubeActivity extends NativeActivity {
     private static final float MAX_PIP_RATIO = 2.39f;
     private static final int NOTIFICATIONS_REQUEST = 1;
 
-    static {
-        // Loaded here, before NativeActivity opens it, so JNI_OnLoad runs with this class loader.
-        System.loadLibrary("@SLOPTUBE_LIB_NAME@");
-    }
-
     private boolean pipAllowed;
     private Rational pipAspect = new Rational(16, 9);
     private boolean inPip;
@@ -51,6 +46,11 @@ public final class SlopTubeActivity extends NativeActivity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        // NativeActivity has just opened the library; loading it again through Java only runs
+        // JNI_OnLoad (with this class loader), which registers the natives below. Loaded any
+        // earlier, from a static initializer, System.loadLibrary hung before JNI_OnLoad on about
+        // every other launch of a Galaxy A14, the app stuck on its splash screen.
+        System.loadLibrary("@SLOPTUBE_LIB_NAME@");
         // Relaunched from recents or recreated, the intent is the old one: its video was opened.
         Intent intent = getIntent();
         boolean fromHistory = intent != null

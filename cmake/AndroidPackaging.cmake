@@ -13,6 +13,18 @@ set(SLOPTUBE_KEYSTORE "${debug_keystore}" CACHE FILEPATH "APK signing keystore")
 # apksigner password spec: "pass:<password>", "env:<variable>" or "file:<path>". Releases read it
 # from the environment so it never lands in the build files.
 set(SLOPTUBE_KEYSTORE_PASS "pass:android" CACHE STRING "APK signing keystore password (apksigner spec)")
+# A debuggable app lets `adb shell run-as` and `debuggerd -b` reach it (stacks of a hung app);
+# debug builds are, and a release build can be for diagnosis.
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(debuggable_default ON)
+else()
+    set(debuggable_default OFF)
+endif()
+option(SLOPTUBE_DEBUGGABLE "Mark the APK debuggable" ${debuggable_default})
+set(debug_mode_flag)
+if(SLOPTUBE_DEBUGGABLE)
+    set(debug_mode_flag --debug-mode)
+endif()
 
 set(build_tools "${SLOPTUBE_ANDROID_SDK}/build-tools/${SLOPTUBE_BUILD_TOOLS_VERSION}")
 set(platform_jar "${SLOPTUBE_ANDROID_SDK}/platforms/android-${SLOPTUBE_ANDROID_TARGET_SDK}/android.jar")
@@ -117,7 +129,7 @@ function(sloptube_add_apk library)
         COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${library}>" "${lib_dir}/"
         COMMAND "${build_tools}/aapt2" compile --dir "${work}/res" -o "${resources}"
         COMMAND "${build_tools}/aapt2" link -o "${unsigned}" --manifest "${manifest}"
-            -I "${platform_jar}" "${resources}"
+            -I "${platform_jar}" ${debug_mode_flag} "${resources}"
         COMMAND ${CMAKE_COMMAND} -E chdir "${work}" "${SLOPTUBE_ZIP}" -q -0 -r "${unsigned}" lib
         COMMAND ${CMAKE_COMMAND} -E chdir "${dex_dir}" "${SLOPTUBE_ZIP}" -q "${unsigned}" classes.dex
         COMMAND "${build_tools}/zipalign" -f -P 16 4 "${unsigned}" "${aligned}"

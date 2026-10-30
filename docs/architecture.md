@@ -40,7 +40,7 @@ compiled by CMake with `javac` and `d8`, no Gradle) receives them and hands them
 
 | Class | Role |
 | --- | --- |
-| `SlopTubeActivity` | Extends `NativeActivity`. Loads the library first, so `JNI_OnLoad` runs with the app's class loader; forwards notification taps (`onNewIntent`) and picture-in-picture changes; native code calls its methods to publish playback, allow picture-in-picture and schedule notifications |
+| `SlopTubeActivity` | Extends `NativeActivity`. Loads the library again through `System.loadLibrary` right after `NativeActivity.onCreate` has opened it, which only runs `JNI_OnLoad` with the app's class loader (loading it earlier, from a static initializer, hung about every other launch on a Galaxy A14); forwards notification taps (`onNewIntent`) and picture-in-picture changes; native code calls its methods to publish playback, allow picture-in-picture and schedule notifications |
 | `PlaybackService` | Foreground service of type `mediaPlayback`: keeps the process alive while playing in the background, owns the `MediaSession` (notification, lock screen, headset, Bluetooth, the PiP window's controls), audio focus and pausing when headphones are unplugged |
 | `UploadsJob` | `JobService` run about hourly while notifications are on; asks native code for new uploads and notifies them |
 
