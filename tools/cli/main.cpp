@@ -465,6 +465,14 @@ int run(std::span<const std::string_view> args) {
         return printPages(api, api.channelTab(argument, found->second),
                           args.size() > 3 ? std::atoi(args[3].data()) : 1);
     }
+    if (command == "handle") {
+        auto id = api.channelIdOf(argument);
+        if (!report(id)) {
+            return EXIT_FAILURE;
+        }
+        std::println("{}", *id);
+        return EXIT_SUCCESS;
+    }
     if (command == "chat") {
         return chat(api, argument, args.size() > 2 ? std::atoi(args[2].data()) : 1);
     }

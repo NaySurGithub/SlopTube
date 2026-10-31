@@ -2,6 +2,7 @@
 
 #include <imgui.h>
 
+#include <algorithm>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -32,8 +33,11 @@ void wrapLines(ImFont* font, float size, std::string_view text, float width, int
             const float ellipsis = font->CalcTextSizeA(size, FLT_MAX, 0, kEllipsis.data(),
                                                        kEllipsis.data() + kEllipsis.size())
                                        .x;
+            // Measured up to the line break only: past it, ImGui would carry on with the next
+            // lines and the "cut" line would hold the rest of the text.
+            const char* lineEnd = std::find(cursor, end, '\n');
             const char* cut = cursor;
-            font->CalcTextSizeA(size, width - ellipsis, 0, cursor, end, &cut);
+            font->CalcTextSizeA(size, width - ellipsis, 0, cursor, lineEnd, &cut);
             emit(std::string_view(cursor, cut), true);
             return;
         }

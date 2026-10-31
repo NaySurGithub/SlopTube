@@ -112,6 +112,9 @@ void App::drawSheet(Frame& frame, ImVec2 min, ImVec2 max) {
     case Sheet::Update:
         drawUpdateSheet(frame, min, max);
         break;
+    case Sheet::ItemActions:
+        drawItemActionsSheet(frame, min, max);
+        break;
     case Sheet::None:
         break;
     }
@@ -129,6 +132,9 @@ float App::modalSheetHeight(const Canvas& c, float available) const {
         break;
     case Sheet::Update:
         height = updateSheetHeight(c);
+        break;
+    case Sheet::ItemActions:
+        height = itemActionsSheetHeight(c);
         break;
     default:
         height = accountsSheetHeight(c);

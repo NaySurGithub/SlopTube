@@ -13,6 +13,8 @@ inline constexpr std::string_view kSettingsFile = "settings.json";
 inline constexpr std::string_view kSearchHistoryFile = "searches.txt";
 inline constexpr std::string_view kNotifiedFile = "notified.txt"; // Uploads already seen.
 inline constexpr std::string_view kUpdateFile = "update.apk";     // A downloaded update.
+// Uploads already shown behind the bell (Notifications), for its unread count.
+inline constexpr std::string_view kNotificationsSeenFile = "inbox.txt";
 // The background job's copy of the session, so it never writes the app's.
 inline constexpr std::string_view kUploadsSessionFile = "uploads-session.json";
 

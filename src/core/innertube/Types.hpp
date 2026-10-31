@@ -29,6 +29,7 @@ enum class Endpoint : std::uint8_t {
     ReelSequence,
     ChannelTab, // `browse` through MWEB: a channel's videos, shorts, live or playlists tab.
     LiveChat,
+    ResolveUrl,
 };
 
 enum class ItemKind : std::uint8_t {

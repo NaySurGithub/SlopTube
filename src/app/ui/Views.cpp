@@ -21,9 +21,19 @@ using innertube::ItemKind;
 constexpr float kTextGap = 4;     // dp between stacked text blocks.
 constexpr float kIconTarget = 48; // dp, minimum touch target.
 constexpr float kTitleLines = 2;
+constexpr float kShelfMenuWidth = 24; // dp of a tile's ••• beside its title.
+constexpr float kChipSpacing = 8;     // dp between chips, as on the official app.
+constexpr float kShelfTitleGap = 15;  // dp from a tile's thumbnail to its title, as measured.
+// Feed cards, as measured on the official app.
+constexpr float kCardTextX = 57;       // dp from the card's left edge to its title.
+constexpr float kCardMenuInset = 36;   // dp from the right edge to the centre of •••.
+constexpr float kCardMenuGap = 16;     // dp between the title and •••.
+constexpr float kCardMetaGap = 6;      // dp between the title and the metadata.
+constexpr float kCardMetaSpacing = 10; // dp between metadata segments.
+constexpr float kViewsIcon = 8;        // dp, the ▷ before the views.
+constexpr std::string_view kDetailSeparator = " • ";
 constexpr float kRowTitleLines = 3;
-constexpr float kStatusWidth = 280; // dp, width of centred status messages.
-constexpr std::string_view kSeparator = " · ";
+constexpr float kStatusWidth = 280;  // dp, width of centred status messages.
 constexpr float kRippleSpeed = 2.5f; // Ripple radius growth, in rectangle diagonals per second.
 constexpr ImU32 kRipple = IM_COL32(0xff, 0xff, 0xff, 0x24);
 constexpr ImU32 kShimmer = IM_COL32(0xff, 0xff, 0xff, 0x10);
@@ -56,16 +66,6 @@ float rowHeight(const Frame& frame) {
     return frame.dp(theme::kRowThumbnailWidth * theme::kAspect16x9 + theme::kGutter);
 }
 
-std::string metaLine(const Item& item) {
-    if (item.detail.empty()) {
-        return item.channel;
-    }
-    if (item.channel.empty()) {
-        return item.detail;
-    }
-    return item.channel + std::string(kSeparator) + item.detail;
-}
-
 void drawBadge(Frame& frame, std::string_view text, ImVec2 thumbnailMax) {
     if (text.empty()) {
         return;
@@ -82,7 +82,55 @@ void drawBadge(Frame& frame, std::string_view text, ImVec2 thumbnailMax) {
                text);
 }
 
-void drawCard(Frame& frame, const Item& item, ImVec2 origin, float width) {
+// The official app's compact metadata: the views without their unit, the age abbreviated
+// ("288 k vues • il y a 6 heures" -> "288 k", "il y a 6 h").
+struct CompactMeta {
+    std::string views; // Empty when the detail has none.
+    std::string age;
+};
+
+CompactMeta compactMeta(std::string_view detail) {
+    CompactMeta meta;
+    std::string_view rest = detail;
+    if (const auto separator = detail.find(kDetailSeparator); separator != std::string_view::npos) {
+        std::string_view views = detail.substr(0, separator);
+        rest = detail.substr(separator + kDetailSeparator.size());
+        for (const std::string_view unit : {" de vues", " vues", " vue", " views", " view"}) {
+            if (views.ends_with(unit)) {
+                meta.views = views.substr(0, views.size() - unit.size());
+                break;
+            }
+        }
+        if (meta.views.empty()) {
+            rest = detail; // Not a view count ("1,4 k spectateurs"): kept whole.
+        }
+    }
+    meta.age = rest;
+    constexpr std::array<std::pair<std::string_view, std::string_view>, 13> kUnits{{
+        {" secondes", " s"},
+        {" seconde", " s"},
+        {" minutes", " min"},
+        {" minute", " min"},
+        {" heures", " h"},
+        {" heure", " h"},
+        {" jours", " j"},
+        {" jour", " j"},
+        {" semaines", " sem."},
+        {" semaine", " sem."},
+        {" ans", " a"},
+        {" an", " a"},
+        {" mois", " mois"},
+    }};
+    for (const auto& [unit, shortUnit] : kUnits) {
+        if (meta.age.ends_with(unit)) {
+            meta.age.replace(meta.age.size() - unit.size(), unit.size(), shortUnit);
+            break;
+        }
+    }
+    return meta;
+}
+
+bool drawCard(Frame& frame, const Item& item, ImVec2 origin, float width) {
     const Canvas& c = frame.canvas;
     const CardMetrics metrics = cardMetrics(frame, width);
     drawPressed(frame, origin, {origin.x + width, origin.y + metrics.height});
@@ -91,21 +139,50 @@ void drawCard(Frame& frame, const Item& item, ImVec2 origin, float width) {
     drawThumbnail(frame, imageUrl(item), origin, thumbnailMax, 0);
     drawBadge(frame, item.badge, thumbnailMax);
 
+    // As measured on the official app: the avatar 12 dp from the edge and below the picture, the
+    // title in bold from 57 dp, ••• centred 36 dp from the right edge.
     const float gutter = c.dp(theme::kGutter);
     const float avatar = c.dp(theme::kAvatarSize);
     const float top = thumbnailMax.y + gutter;
     drawAvatar(frame, itemAvatar(frame, item), item.channel,
                {origin.x + gutter + avatar * 0.5f, top + avatar * 0.5f}, theme::kAvatarSize);
 
-    const float textX = origin.x + gutter * 2 + avatar;
-    const float textWidth = origin.x + width - gutter - textX;
+    const float textX = origin.x + c.dp(kCardTextX);
+    const float menuX = origin.x + width - c.dp(kCardMenuInset);
+    const float textWidth = menuX - c.dp(kCardMenuGap) - textX;
     const float titleHeight =
-        c.with(theme::kTitleWeight)
+        c.with(Weight::Bold)
             .paragraph({textX, top}, textWidth, theme::kTitleSize, theme::kTextPrimary, item.title,
                        static_cast<int>(kTitleLines));
-    c.with(theme::kLabelWeight)
-        .line({textX, top + titleHeight + c.dp(kTextGap)}, textWidth, theme::kCaptionSize,
-              theme::kTextSecondary, metaLine(item));
+    c.icon(Icon::MoreHorizontal, {menuX, top + c.lineHeight(theme::kTitleSize) * 0.5f}, 20,
+           theme::kTextPrimary);
+
+    // The channel, then ▷ and the views, then the age, spaced apart without separators.
+    const Canvas label = c.with(theme::kLabelWeight);
+    const float metaY = top + titleHeight + c.dp(kCardMetaGap);
+    float x = textX;
+    const auto segment = [&](std::string_view text) {
+        if (text.empty() || x >= textX + textWidth) {
+            return;
+        }
+        label.line({x, metaY}, textX + textWidth - x, theme::kCaptionSize, theme::kTextSecondary,
+                   text);
+        x += label.measure(theme::kCaptionSize, text).x + c.dp(kCardMetaSpacing);
+    };
+    const CompactMeta meta = compactMeta(item.detail);
+    segment(item.channel);
+    if (!meta.views.empty() && x < textX + textWidth) {
+        const float size = c.dp(kViewsIcon);
+        const float centerY = metaY + c.lineHeight(theme::kCaptionSize) * 0.5f;
+        c.list()->AddTriangle({x, centerY - size * 0.5f}, {x, centerY + size * 0.5f},
+                              {x + size * 0.9f, centerY}, theme::kTextSecondary, c.dp(1.2f));
+        x += size + c.dp(2);
+        segment(meta.views);
+    }
+    segment(meta.age);
+
+    const float target = c.dp(kIconTarget) * 0.5f;
+    return frame.touch.tapped({menuX - target, top - c.dp(8)}, {menuX + target, top + target * 2});
 }
 
 // Returns whether its button was tapped (the rest of the card is hit-tested by the list).
@@ -324,7 +401,8 @@ void drawSkeleton(Frame& frame, ItemStyle style, ImVec2 min, ImVec2 max) {
 std::optional<std::size_t> drawList(Frame& frame, Feed& feed, ItemStyle style, ImVec2 min,
                                     ImVec2 max, const ListHeader& header,
                                     const std::function<void()>& nearEnd,
-                                    std::span<const ListInsert> inserts) {
+                                    std::span<const ListInsert> inserts,
+                                    std::optional<std::size_t>* menu) {
     const float width = max.x - min.x;
     const float viewport = max.y - min.y;
     const float cardHeight =
@@ -389,7 +467,10 @@ std::optional<std::size_t> drawList(Frame& frame, Feed& feed, ItemStyle style, I
                 tapped = index;
             }
         } else if (style == ItemStyle::Card) {
-            drawCard(frame, item, origin, width);
+            if (drawCard(frame, item, origin, width) && menu != nullptr) {
+                *menu = index;
+                continue; // The ••• took the tap.
+            }
         } else {
             drawRow(frame, item, origin, width);
         }
@@ -418,14 +499,16 @@ std::optional<std::size_t> drawList(Frame& frame, Feed& feed, ItemStyle style, I
 
 float shelfHeight(const Frame& frame) {
     const Canvas& c = frame.canvas;
-    return c.dp(theme::kShelfThumbnailWidth * theme::kAspect16x9 + kTextGap * 2) +
+    return c.dp(theme::kShelfThumbnailWidth * theme::kAspect16x9 + kShelfTitleGap + kTextGap) +
            c.lineHeight(theme::kBodySize) * kTitleLines + c.lineHeight(theme::kCaptionSize);
 }
 
-std::optional<std::size_t> drawShelf(Frame& frame, Feed& feed, ImVec2 origin, float width) {
+std::optional<std::size_t> drawShelf(Frame& frame, Feed& feed, ImVec2 origin, float width,
+                                     std::optional<std::size_t>* menu) {
     const Canvas& c = frame.canvas;
-    const float gutter = c.dp(theme::kGutter);
+    const float gutter = c.dp(theme::kShelfSpacing);
     const float tile = c.dp(theme::kShelfThumbnailWidth);
+    const float menuWidth = menu != nullptr ? c.dp(kShelfMenuWidth) : 0;
     const float stride = tile + gutter;
     const float height = shelfHeight(frame);
     const ImVec2 max{origin.x + width, origin.y + height};
@@ -450,13 +533,26 @@ std::optional<std::size_t> drawShelf(Frame& frame, Feed& feed, ImVec2 origin, fl
         const ImVec2 thumbnailMax{x + tile, origin.y + tile * theme::kAspect16x9};
         drawThumbnail(frame, imageUrl(item), {x, origin.y}, thumbnailMax, theme::kCornerRadius);
         drawBadge(frame, item.badge, thumbnailMax);
-        float y = thumbnailMax.y + c.dp(kTextGap);
+        const float titleY = thumbnailMax.y + c.dp(kShelfTitleGap);
+        float y = titleY;
         y += c.with(theme::kTitleWeight)
-                 .paragraph({x, y}, tile, theme::kBodySize, theme::kTextPrimary, item.title,
-                            static_cast<int>(kTitleLines));
+                 .paragraph({x, y}, tile - menuWidth, theme::kBodySize, theme::kTextPrimary,
+                            item.title, static_cast<int>(kTitleLines));
         c.with(theme::kLabelWeight)
-            .line({x, y}, tile, theme::kCaptionSize, theme::kTextSecondary, item.channel);
-        if (frame.touch.tapped({x, origin.y}, {x + tile, max.y})) {
+            .line({x, y}, tile - menuWidth, theme::kCaptionSize, theme::kTextSecondary,
+                  item.channel);
+        // ••• beside the title, as on the official app.
+        const ImVec2 menuMin{x + tile - menuWidth, titleY - c.dp(kTextGap)};
+        const ImVec2 menuMax{x + tile + gutter * 0.5f, titleY + c.lineHeight(theme::kBodySize) * 2};
+        if (menu != nullptr) {
+            c.icon(Icon::MoreHorizontal,
+                   {x + tile - menuWidth * 0.5f + c.dp(4),
+                    titleY + c.lineHeight(theme::kBodySize) * 0.5f},
+                   18, theme::kTextPrimary);
+        }
+        if (menu != nullptr && frame.touch.tapped(menuMin, menuMax)) {
+            *menu = index;
+        } else if (frame.touch.tapped({x, origin.y}, {x + tile, max.y})) {
             tapped = index;
         }
     }
@@ -499,12 +595,12 @@ bool textRow(Frame& frame, std::string_view label, ImVec2 origin, float width) {
     const float height = frame.dp(kIconTarget);
     const ImVec2 max{origin.x + width, origin.y + height};
     drawPressed(frame, origin, max);
-    const float gutter = c.dp(theme::kGutter);
+    const float margin = c.dp(theme::kShelfSpacing); // Section titles line up with the shelves.
     const ImVec2 extent = heading.measure(theme::kSectionSize, label);
-    heading.text({origin.x + gutter, origin.y + (height - extent.y) * 0.5f}, theme::kSectionSize,
+    heading.text({origin.x + margin, origin.y + (height - extent.y) * 0.5f}, theme::kSectionSize,
                  theme::kTextPrimary, label);
     c.icon(Icon::ChevronRight,
-           {origin.x + gutter + extent.x + c.dp(theme::kIconSize) * 0.6f, origin.y + height * 0.5f},
+           {origin.x + margin + extent.x + c.dp(theme::kIconSize) * 0.6f, origin.y + height * 0.5f},
            theme::kIconSize * 0.8f, theme::kTextPrimary);
     return frame.touch.tapped(origin, max);
 }
@@ -536,7 +632,7 @@ bool chipButton(Frame& frame, std::string_view label, ImVec2 origin, bool select
     drawPressed(frame, origin, max, theme::kCornerRadius);
     medium.text({origin.x + gutter, origin.y + (height - c.lineHeight(theme::kBodySize)) * 0.5f},
                 theme::kBodySize, selected ? theme::kTextOnLight : theme::kTextPrimary, label);
-    x += width + gutter * 0.75f;
+    x += width + c.dp(kChipSpacing);
     return frame.touch.tapped(origin, max);
 }
 

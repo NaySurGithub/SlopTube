@@ -11,11 +11,11 @@ inline constexpr int kInterfaceSizes = static_cast<int>(kInterfaceScales.size())
 
 // Preferences of the Settings screen, kept in the data directory.
 struct Settings {
-    bool backgroundPlay = true;       // Playback goes on when the app leaves the screen.
-    bool pictureInPicture = true;     // ...in a small window over other apps.
-    bool autoplay = true;             // The next video plays when one ends.
-    bool uploadNotifications = false; // New uploads of subscriptions are notified.
-    bool checkUpdates = true;         // Release builds look for a newer release at launch.
+    bool backgroundPlay = true;      // Playback goes on when the app leaves the screen.
+    bool pictureInPicture = true;    // ...in a small window over other apps.
+    bool autoplay = true;            // The next video plays when one ends.
+    bool uploadNotifications = true; // New uploads of subscriptions are notified.
+    bool checkUpdates = true;        // Release builds look for a newer release at launch.
     // Text and buttons: 0 normal, 1 large, 2 extra large (kInterfaceScales).
     int interfaceSize = 0;
 

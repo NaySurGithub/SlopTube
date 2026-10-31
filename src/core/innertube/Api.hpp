@@ -54,6 +54,8 @@ public:
     // One tab of a channel, read anonymously through MWEB. Empty when the channel has no such
     // tab (the server answers with the home tab instead).
     [[nodiscard]] Result<Page> channelTab(std::string_view channelId, ChannelTab tab);
+    // Channel id of a handle ("@name").
+    [[nodiscard]] Result<std::string> channelIdOf(std::string_view handle);
     // Avatar of any channel without signing in; cheap enough to resolve feed avatars lazily.
     [[nodiscard]] Result<std::string> channelAvatar(std::string_view channelId);
     // Uploader of a video, for feeds whose items do not link to it (one small anonymous request).

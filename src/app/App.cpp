@@ -135,7 +135,12 @@ void drawProgressBar(const Canvas& c, float x0, float x1, float y0, float y1, fl
 
 constexpr float kScreenSlide = 0.2f; // Fraction of the width a pushed screen slides in from.
 constexpr float kWatchRise = 0.12f;  // Fraction of the height the watch page rises from.
-constexpr float kTopBarAvatar = 28;  // dp
+// The top bar, as measured on the official app.
+constexpr float kBarIconInset = 24;        // dp from the right edge to the last icon's centre.
+constexpr float kBarIconSpacing = 48;      // dp between icon centres.
+constexpr float kAccountsPillPadding = 14; // dp inside "Accounts".
+constexpr float kAccountsPillExtra = 50;   // dp of "Accounts" besides its label (chevron).
+constexpr float kChipRadius = 8;           // dp
 
 } // namespace
 
@@ -183,6 +188,7 @@ App::App(android_app* native)
     ImGui_ImplOpenGL3_Init("#version 300 es");
 
     applySettings();
+    loadSeenNotifications();
     // An update downloaded earlier is installed by now, or no longer wanted.
     std::error_code removeError;
     std::filesystem::remove(m_platform.dataDirectory() / kUpdateFile, removeError);
@@ -841,6 +847,9 @@ void App::load(const std::shared_ptr<Feed>& feed, PageRequest request) {
                 feed->error = std::move(result.error().message);
                 return;
             }
+            if (feed->keep) {
+                std::erase_if(result->items, [&](const auto& item) { return !feed->keep(item); });
+            }
             if (append) {
                 innertube::appendPage(feed->page, std::move(*result));
             } else {
@@ -1042,6 +1051,12 @@ void App::drawScreen(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
     case Route::Settings:
         drawSettings(frame, screen, min, screenMax);
         break;
+    case Route::Notifications:
+        drawNotifications(frame, screen, min, screenMax);
+        break;
+    case Route::AllSubscriptions:
+        drawFeedScreen(frame, screen, min, screenMax);
+        break;
     }
     const ImVec2 offset = screen.route == Route::Watch
                               ? ImVec2{0, (1 - shown) * (max.y - min.y) * kWatchRise}
@@ -1064,10 +1079,15 @@ void App::drawFeed(Frame& frame, std::shared_ptr<Feed> feed, ItemStyle style, Im
         }
         return;
     }
+    std::optional<std::size_t> menu;
     if (const auto tapped = drawList(
-            frame, *feed, style, min, max, header, [this, feed] { loadMore(feed); }, inserts)) {
+            frame, *feed, style, min, max, header, [this, feed] { loadMore(feed); }, inserts,
+            &menu)) {
         later([this, item = feed->page.items[*tapped],
                source = VideoSource{.feed = feed, .index = *tapped}] { openItem(item, source); });
+    }
+    if (menu) {
+        later([this, item = feed->page.items[*menu]] { openItemActions(item); });
     }
 }
 
@@ -1089,6 +1109,8 @@ void App::drawTab(Frame& frame, ImVec2 min, ImVec2 max) {
     case Tab::Subscriptions:
         if (!m_session.signedIn()) {
             drawSignInPrompt(frame, contentMin, contentMax);
+        } else if (m_tab == Tab::Subscriptions) {
+            drawSubscriptions(frame, contentMin, contentMax);
         } else {
             auto shelves =
                 m_tab == Tab::Home ? shortsShelves(frame.canvas, width) : std::vector<ListInsert>{};
@@ -1123,26 +1145,44 @@ void App::drawHomeBar(Frame& frame, ImVec2 origin, float width) {
     const Canvas& c = frame.canvas;
     const float height = m_insets.top + c.dp(theme::kTopBarHeight);
     c.rect(origin, {origin.x + width, origin.y + height}, theme::kBackground);
-
     const float centerY = origin.y + m_insets.top + c.dp(theme::kTopBarHeight) * 0.5f;
-    const ImVec2 accent = c.measure(theme::kWordmarkSize, kWordmarkAccent);
-    const ImVec2 at{origin.x + c.dp(theme::kGutter) + c.dp(4), centerY - accent.y * 0.5f};
-    c.text(at, theme::kWordmarkSize, theme::kAccent, kWordmarkAccent);
-    c.text({at.x + accent.x, at.y}, theme::kWordmarkSize, theme::kTextPrimary, kWordmarkRest);
 
-    const float icon = c.dp(theme::kTopBarHeight) * 0.5f;
-    float right = origin.x + width - c.dp(theme::kGutter) - icon;
-    if (const auto accounts = m_session.accounts(); !accounts.empty()) {
-        const auto& me = accounts[std::min(m_session.activeAccount(), accounts.size() - 1)];
-        const ImVec2 center{right, centerY};
-        drawAvatar(frame, me.photo, me.name, center, kTopBarAvatar);
-        if (frame.touch.tapped({center.x - icon, center.y - icon},
-                               {center.x + icon, center.y + icon})) {
+    // Measured on the official app: the last icon 24 dp from the right edge, 48 dp between icons.
+    float right = origin.x + width - c.dp(kBarIconInset);
+    const auto nextIcon = [&] {
+        const float x = right;
+        right -= c.dp(kBarIconSpacing);
+        return x;
+    };
+    if (m_tab == Tab::You) {
+        // "Accounts" on the left (the account switcher), settings with the others.
+        const Canvas medium = c.with(Weight::Medium);
+        const std::string_view label = tr(Text::Accounts);
+        const float pillHeight = c.dp(theme::kChipHeight);
+        const float pillWidth =
+            medium.measure(theme::kCaptionSize, label).x + c.dp(kAccountsPillExtra);
+        const ImVec2 pillMin{origin.x + c.dp(theme::kGutter), centerY - pillHeight * 0.5f};
+        const ImVec2 pillMax{pillMin.x + pillWidth, pillMin.y + pillHeight};
+        drawPressed(frame, pillMin, pillMax, kChipRadius * 2);
+        c.list()->AddRect(pillMin, pillMax, theme::kOutline, pillHeight * 0.5f, c.dp(1));
+        medium.text({pillMin.x + c.dp(kAccountsPillPadding),
+                     centerY - c.lineHeight(theme::kCaptionSize) * 0.5f},
+                    theme::kCaptionSize, theme::kTextPrimary, label);
+        c.icon(Icon::ChevronDown, {pillMax.x - c.dp(kAccountsPillPadding + 6), centerY}, 16,
+               theme::kTextPrimary);
+        if (frame.touch.tapped(pillMin, pillMax) && m_session.signedIn()) {
             later([this] { openSheet(Sheet::Accounts); });
         }
-        right -= icon * 2;
+        if (iconButton(frame, Icon::Settings, {nextIcon(), centerY}, theme::kTextPrimary)) {
+            later([this] { openSettings(); });
+        }
+    } else {
+        const ImVec2 accent = c.measure(theme::kWordmarkSize, kWordmarkAccent);
+        const ImVec2 at{origin.x + c.dp(theme::kGutter) + c.dp(4), centerY - accent.y * 0.5f};
+        c.text(at, theme::kWordmarkSize, theme::kAccent, kWordmarkAccent);
+        c.text({at.x + accent.x, at.y}, theme::kWordmarkSize, theme::kTextPrimary, kWordmarkRest);
     }
-    if (iconButton(frame, Icon::Search, {right, centerY}, theme::kTextPrimary)) {
+    if (iconButton(frame, Icon::Search, {nextIcon(), centerY}, theme::kTextPrimary)) {
         later([this] {
             m_query.fill(0);
             m_focusSearch = true;
@@ -1150,9 +1190,12 @@ void App::drawHomeBar(Frame& frame, ImVec2 origin, float width) {
             push(Screen{.route = Route::Search});
         });
     }
-    right -= icon * 2;
-    if (iconButton(frame, Icon::Settings, {right, centerY}, theme::kTextPrimary)) {
-        later([this] { openSettings(); });
+    if (m_session.signedIn()) {
+        const ImVec2 bell{nextIcon(), centerY};
+        if (iconButton(frame, Icon::Bell, bell, theme::kTextPrimary)) {
+            later([this] { openNotifications(); });
+        }
+        drawUnreadBadge(c, bell, unreadNotifications());
     }
 }
 
@@ -1165,10 +1208,12 @@ void App::drawTitleBar(Frame& frame, std::string_view title, ImVec2 origin, floa
     if (iconButton(frame, Icon::Back, {origin.x + icon, centerY}, theme::kTextPrimary)) {
         later([this] { goBack(); });
     }
+    // Page titles are bold, as on the official app.
     const float textX = origin.x + icon * 2 + c.dp(theme::kGutter);
-    c.line({textX, centerY - c.lineHeight(theme::kSectionSize) * 0.5f},
-           origin.x + width - textX - c.dp(theme::kGutter), theme::kSectionSize,
-           theme::kTextPrimary, title);
+    c.with(theme::kHeadingWeight)
+        .line({textX, centerY - c.lineHeight(theme::kSectionSize) * 0.5f},
+              origin.x + width - textX - c.dp(theme::kGutter), theme::kSectionSize,
+              theme::kTextPrimary, title);
 }
 
 void App::drawSignInPrompt(Frame& frame, ImVec2 min, ImVec2 max) {
@@ -1196,14 +1241,16 @@ void App::drawYou(Frame& frame, ImVec2 min, ImVec2 max) {
     const float rowHeight = c.dp(48);
     const float shelf = shelfHeight(frame);
     const float spacing = c.dp(kSectionSpacing);
-    const float account = c.dp(64 + theme::kChipHeight) + c.dp(theme::kGutter) * 3;
+    const float chips = c.dp(theme::kChipHeight) + c.dp(theme::kGutter);
 
+    // As the official app: the profile, "History ›" and its shelf, then "Library" with its chips
+    // above the playlists.
     ListHeader header{
-        .height = account + rowHeight + shelf + spacing + rowHeight * 2,
+        .height = m_profileHeight + rowHeight + shelf + spacing + rowHeight + chips,
         .draw =
-            [&, account](Frame& f, ImVec2 top, float width) {
-                (void)drawAccountHeader(f, top, width);
-                const ImVec2 origin{top.x, top.y + account};
+            [&](Frame& f, ImVec2 top, float width) {
+                m_profileHeight = drawAccountHeader(f, top, width);
+                const ImVec2 origin{top.x, top.y + m_profileHeight};
                 if (textRow(f, tr(Text::History), origin, width)) {
                     later([this] {
                         Screen screen{.route = Route::History,
@@ -1213,29 +1260,58 @@ void App::drawYou(Frame& frame, ImVec2 min, ImVec2 max) {
                     });
                 }
                 const ImVec2 shelfOrigin{origin.x, origin.y + rowHeight};
+                std::optional<std::size_t> menu;
                 if (m_historyShelf->page.items.empty()) {
                     drawFeedStatus(f, *m_historyShelf, shelfOrigin,
                                    {origin.x + width, shelfOrigin.y + shelf});
-                } else if (const auto tapped = drawShelf(f, *m_historyShelf, shelfOrigin, width)) {
+                } else if (const auto tapped =
+                               drawShelf(f, *m_historyShelf, shelfOrigin, width, &menu)) {
                     later([this, item = m_historyShelf->page.items[*tapped],
                            source = VideoSource{.feed = m_historyShelf, .index = *tapped}] {
                         openItem(item, source);
                     });
                 }
-                // Downloads, watchable without a connection.
-                const ImVec2 downloadsOrigin{origin.x, shelfOrigin.y + shelf + spacing};
-                if (textRow(f, tr(Text::Downloads), downloadsOrigin, width)) {
-                    later([this] { openDownloads(); });
+                if (menu) {
+                    later([this, item = m_historyShelf->page.items[*menu]] {
+                        openItemActions(item);
+                    });
                 }
-                const float y = downloadsOrigin.y + rowHeight;
-                const float centerY = y + rowHeight * 0.5f;
+                const float libraryY = shelfOrigin.y + shelf + spacing;
                 const Canvas heading = f.canvas.with(theme::kHeadingWeight);
-                const ImVec2 extent = heading.measure(theme::kSectionSize, tr(Text::Playlists));
-                heading.text({origin.x + c.dp(theme::kGutter), centerY - extent.y * 0.5f},
-                             theme::kSectionSize, theme::kTextPrimary, tr(Text::Playlists));
+                const ImVec2 extent = heading.measure(theme::kSectionSize, tr(Text::Library));
+                heading.text({origin.x + c.dp(theme::kShelfSpacing),
+                              libraryY + (rowHeight - extent.y) * 0.5f},
+                             theme::kSectionSize, theme::kTextPrimary, tr(Text::Library));
+                // "Recent" keeps the server's order; "Playlists" sorts them by title.
+                float x = origin.x + c.dp(theme::kShelfSpacing);
+                const float chipsY = libraryY + rowHeight;
+                for (const bool byTitle : {false, true}) {
+                    const bool selected = m_libraryByTitle == byTitle;
+                    if (chipButton(f, tr(byTitle ? Text::Playlists : Text::Recent), {x, chipsY},
+                                   selected, x) &&
+                        !selected) {
+                        later([this, byTitle] { sortLibrary(byTitle); });
+                    }
+                }
             },
     };
     drawFeed(frame, m_tabFeeds[std::to_underlying(Tab::You)], ItemStyle::Row, min, max, header);
+}
+
+void App::sortLibrary(bool byTitle) {
+    m_libraryByTitle = byTitle;
+    auto& feed = *m_tabFeeds[std::to_underlying(Tab::You)];
+    if (byTitle) {
+        std::ranges::stable_sort(feed.page.items, {}, &innertube::Item::title);
+    } else {
+        feed = Feed{};
+        for (const auto& [tab, kind] : kTabFeedSources) {
+            if (tab == Tab::You) {
+                load(m_tabFeeds[std::to_underlying(Tab::You)],
+                     [this, feedKind = kind] { return m_api.feed(feedKind); });
+            }
+        }
+    }
 }
 
 void App::drawSignIn(Frame& frame, ImVec2 min, ImVec2 max) {

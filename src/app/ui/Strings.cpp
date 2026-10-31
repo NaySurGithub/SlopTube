@@ -205,6 +205,18 @@ constexpr std::array<Translation, std::to_underlying(Text::Count)> kTranslations
     {Text::CheckForUpdates, {"Check for updates", "Rechercher une mise à jour"}},
     {Text::CheckingForUpdates, {"Checking for updates…", "Recherche d'une mise à jour…"}},
     {Text::CurrentVersion, {"Version {}", "Version {}"}},
+    {Text::Notifications, {"Notifications", "Notifications"}},
+    {Text::Library, {"Library", "Bibliothèque"}},
+    {Text::Recent, {"Recent", "Récents"}},
+    {Text::SaveToPlaylist, {"Save to playlist", "Enregistrer dans une playlist"}},
+    {Text::FilterAll, {"All", "Tous"}},
+    {Text::AllChannels, {"All", "Tout"}},
+    {Text::AllSubscriptions, {"All subscriptions", "Tous les abonnements"}},
+    {Text::NotificationsAll, {"All", "Toutes"}},
+    {Text::NotificationsToday, {"Today", "Aujourd'hui"}},
+    {Text::NotificationsThisWeek, {"This week", "Cette semaine"}},
+    {Text::NotificationsOlder, {"Older", "Plus anciennes"}},
+    {Text::UploadedPrefix, {"Uploaded: ", "Mise en ligne : "}},
 }};
 
 // Catch a missing or misordered row at compile time rather than showing the wrong text.

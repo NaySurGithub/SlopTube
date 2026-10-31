@@ -19,6 +19,10 @@ inline constexpr ImU32 kTextSecondary = IM_COL32(0xaa, 0xaa, 0xaa, 0xff);
 inline constexpr ImU32 kTextOnLight = IM_COL32(0x0f, 0x0f, 0x0f, 0xff);
 inline constexpr ImU32 kAccent = IM_COL32(0xff, 0x00, 0x33, 0xff);
 inline constexpr ImU32 kLink = IM_COL32(0x3e, 0xa6, 0xff, 0xff);
+// Measured on the official app (Galaxy A14): the unread count on the bell, and the 1 dp border of
+// outlined buttons ("Accounts", the second profile button).
+inline constexpr ImU32 kBadgeRed = IM_COL32(0xe1, 0x00, 0x2d, 0xff);
+inline constexpr ImU32 kOutline = IM_COL32(0x4c, 0x4c, 0x4c, 0xff);
 inline constexpr ImU32 kBadge = IM_COL32(0x00, 0x00, 0x00, 0xcc);
 inline constexpr ImU32 kScrim = IM_COL32(0x00, 0x00, 0x00, 0x66);
 inline constexpr ImU32 kDivider = IM_COL32(0xff, 0xff, 0xff, 0x1a);
@@ -42,7 +46,8 @@ inline constexpr float kChipHeight = 32;
 inline constexpr float kPillRadius = 18;
 inline constexpr float kCardSpacing = 16;
 inline constexpr float kRowThumbnailWidth = 160;
-inline constexpr float kShelfThumbnailWidth = 160;
+inline constexpr float kShelfThumbnailWidth = 144; // As measured on the official app.
+inline constexpr float kShelfSpacing = 16;         // dp between tiles, and before the first.
 inline constexpr float kBadgeMargin = 6;
 inline constexpr float kBadgePadding = 4;
 inline constexpr float kSearchFieldHeight = 36;

@@ -159,6 +159,18 @@ enum class Text : std::uint8_t {
     CheckForUpdates,
     CheckingForUpdates,
     CurrentVersion,
+    Notifications,
+    Library,
+    Recent,
+    SaveToPlaylist,
+    FilterAll,
+    AllChannels,
+    AllSubscriptions,
+    NotificationsAll,
+    NotificationsToday,
+    NotificationsThisWeek,
+    NotificationsOlder,
+    UploadedPrefix,
     Count,
 };
 

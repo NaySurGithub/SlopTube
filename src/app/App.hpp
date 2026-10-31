@@ -30,6 +30,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 struct android_app;
@@ -58,6 +59,8 @@ enum class Route : std::uint8_t {
     Post,
     Downloads,
     Settings,
+    Notifications,
+    AllSubscriptions, // Every subscribed channel ("All" in Subscriptions).
 };
 
 // Panels sliding up over part of the screen.
@@ -69,7 +72,8 @@ enum class Sheet : std::uint8_t {
     Save,
     Download,
     LiveChat,
-    Update, // A newer release of the app is offered.
+    Update,      // A newer release of the app is offered.
+    ItemActions, // The ⋮ / ••• menu of a video.
 };
 
 // A paginated list of comments: a video's top-level comments or the replies to one.
@@ -255,7 +259,7 @@ private:
         // Account and save sheets cover the screen with a scrim and size to their content.
         [[nodiscard]] bool modal() const {
             return kind == Sheet::Accounts || kind == Sheet::Save || kind == Sheet::Download ||
-                   kind == Sheet::Update;
+                   kind == Sheet::Update || kind == Sheet::ItemActions;
         }
     };
 
@@ -331,6 +335,23 @@ private:
     void drawPictureInPicture(Frame& frame, ImVec2 display);
     // Watching a video: the watch page or the mini player (not Shorts).
     [[nodiscard]] bool watching() const;
+
+    // The ⋮ / ••• menu of a video (ItemActions.cpp).
+    void openItemActions(innertube::Item item);
+    [[nodiscard]] float itemActionsSheetHeight(const Canvas& canvas) const;
+    void drawItemActionsSheet(Frame& frame, ImVec2 min, ImVec2 max);
+
+    // Subscriptions (SubscriptionsPage.cpp): the channels row, the filter chips, the feed.
+    void drawSubscriptions(Frame& frame, ImVec2 min, ImVec2 max);
+    void filterSubscriptions(int filter);
+
+    // The bell (NotificationsPage.cpp).
+    void openNotifications();
+    void drawNotifications(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max);
+    void loadSeenNotifications();
+    void markNotificationsSeen();
+    [[nodiscard]] int unreadNotifications();
+    static void drawUnreadBadge(const Canvas& c, ImVec2 bell, int count);
 
     // Settings (SettingsPage.cpp).
     void openSettings();
@@ -429,6 +450,10 @@ private:
     void reloadAccountFeeds();
     void refreshProfile();
     void switchAccount(std::size_t index);
+    // "Library" chips of "You": the server's order, or the playlists by title.
+    void sortLibrary(bool byTitle);
+    // The signed-in account's own channel ("View channel").
+    void openOwnChannel(const std::string& handle);
     void openChannel(std::string channelId, std::string name);
     void openSheet(Sheet sheet);
     void closeSheet();
@@ -633,8 +658,18 @@ private:
     UpdateState m_update;
     bool m_onScreen = true;                        // The window exists: the app is visible.
     bool m_typing = false;                         // The keyboard is up: the caret blinks.
-    bool m_pictureInPicture = false;               // Shown in a picture-in-picture window.
-    std::optional<Platform::Playback> m_published; // Last state given to the media session.
+    int m_subscriptionsFilter = 0;                 // Chip of Subscriptions (kSubscriptionFilters).
+    Scroller m_channelsScroller{Axis::Horizontal}; // The channels row of Subscriptions.
+    Scroller m_subscriptionChipsScroller{Axis::Horizontal};
+    float m_profileHeight = 0;     // Of the "You" header, measured on the previous frame.
+    bool m_libraryByTitle = false; // "Library" sorted by title.
+    innertube::Item m_actionItem;  // Of the ⋮ menu.
+    std::string m_ownChannelId;    // The signed-in account's channel, once resolved.
+    std::unordered_set<std::string> m_seenNotifications; // Uploads opened behind the bell.
+    bool m_notificationsBaseline = false;                // What counted as seen was recorded once.
+    std::unordered_set<std::string> m_unreadAtOpen;      // New when the inbox was opened.
+    bool m_pictureInPicture = false;                     // Shown in a picture-in-picture window.
+    std::optional<Platform::Playback> m_published;       // Last state given to the media session.
     double m_publishedAt = 0;
     bool m_pipAllowed = false;
     std::pair<int, int> m_pipSize{};

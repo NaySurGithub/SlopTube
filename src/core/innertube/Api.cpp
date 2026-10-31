@@ -16,7 +16,7 @@ namespace {
 constexpr std::string_view kBaseUrl = "https://youtubei.googleapis.com/youtubei/v1/";
 constexpr std::string_view kQuery = "?prettyPrint=false";
 
-constexpr std::array<std::string_view, 19> kEndpointPaths{
+constexpr std::array<std::string_view, 20> kEndpointPaths{
     "browse",
     "next",
     "player",
@@ -36,8 +36,9 @@ constexpr std::array<std::string_view, 19> kEndpointPaths{
     "reel/reel_watch_sequence",
     "browse",
     "live_chat/get_live_chat",
+    "navigation/resolve_url",
 };
-static_assert(kEndpointPaths.size() == std::to_underlying(Endpoint::LiveChat) + 1);
+static_assert(kEndpointPaths.size() == std::to_underlying(Endpoint::ResolveUrl) + 1);
 
 constexpr std::string_view kAddVideoAction = "ACTION_ADD_VIDEO";
 constexpr std::string_view kRemoveVideoAction = "ACTION_REMOVE_VIDEO_BY_VIDEO_ID";
@@ -236,6 +237,7 @@ constexpr bool isRead(Endpoint endpoint) {
     case Endpoint::ReelSequence:
     case Endpoint::ChannelTab:
     case Endpoint::LiveChat:
+    case Endpoint::ResolveUrl:
         return true;
     default:
         return false;
@@ -434,6 +436,23 @@ Result<ChatPage> Api::liveChat(std::string_view token) {
         return std::unexpected(root.error());
     }
     return parser::liveChat(*root);
+}
+
+Result<std::string> Api::channelIdOf(std::string_view handle) {
+    std::string url = "https://www.youtube.com/";
+    url += handle.starts_with('@') ? "" : "@";
+    url += handle;
+    auto body = openBody();
+    body.field("url", url);
+    auto root = checked(Endpoint::ResolveUrl, ClientKind::Mweb, std::move(body));
+    if (!root) {
+        return std::unexpected(root.error());
+    }
+    const auto id = json::string(*root, "/endpoint/browseEndpoint/browseId");
+    if (id.empty()) {
+        return fail("resolve: no channel");
+    }
+    return std::string(id);
 }
 
 Result<std::string> Api::channelAvatar(std::string_view channelId) {

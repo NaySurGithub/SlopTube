@@ -271,6 +271,34 @@ void Canvas::icon(Icon icon, ImVec2 c, float sizeDp, ImU32 color) const {
         m_list->AddTriangleFilled(p(-2, -3.5f), p(-2, 3.5f), p(3.5f, 0), color);
         break;
     }
+    case Icon::Bell: {
+        // A bell: rounded dome over a flared rim, the clapper below.
+        m_list->PathArcTo(p(0, -2), unit * 6, std::numbers::pi_v<float>,
+                          2 * std::numbers::pi_v<float>);
+        m_list->PathLineTo(p(6, 4));
+        m_list->PathLineTo(p(8, 6.5f));
+        m_list->PathLineTo(p(-8, 6.5f));
+        m_list->PathLineTo(p(-6, 4));
+        m_list->PathStroke(color, stroke, ImDrawFlags_Closed);
+        m_list->AddLine(p(0, -8), p(0, -10), color, stroke);
+        m_list->PathArcTo(p(0, 7.5f), unit * 2.5f, 0, std::numbers::pi_v<float>);
+        m_list->PathStroke(color, stroke);
+        break;
+    }
+    case Icon::ChevronDown:
+        m_list->AddLine(p(-6, -3), p(0, 3), color, stroke);
+        m_list->AddLine(p(0, 3), p(6, -3), color, stroke);
+        break;
+    case Icon::MoreVertical:
+        for (const float y : {-6.0f, 0.0f, 6.0f}) {
+            m_list->AddCircleFilled(p(0, y), unit * 1.8f, color);
+        }
+        break;
+    case Icon::MoreHorizontal:
+        for (const float x : {-6.0f, 0.0f, 6.0f}) {
+            m_list->AddCircleFilled(p(x, 0), unit * 1.8f, color);
+        }
+        break;
     case Icon::History:
         m_list->AddCircle(c, unit * 8, color, 0, stroke);
         m_list->AddLine(c, p(0, -5), color, stroke);

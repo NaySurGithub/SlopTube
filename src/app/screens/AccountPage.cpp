@@ -7,11 +7,18 @@
 namespace sloptube::app {
 namespace {
 
-constexpr float kHeaderAvatar = 64;   // dp
-constexpr float kAccountRow = 64;     // dp
-constexpr float kSwitcherAvatar = 40; // dp
-constexpr float kActionRow = 56;      // dp
-constexpr float kSheetTop = 24;       // dp
+// The profile at the top of "You", as measured on the official app (Galaxy A14): the name 24 sp
+// bold, the handle 12 sp.
+constexpr float kHeaderAvatar = 72;        // dp
+constexpr float kProfileMargin = 16;       // dp from the screen's edges.
+constexpr float kProfileTop = 16;          // dp below the top bar.
+constexpr float kProfileButtonsGap = 22;   // dp between the photo and the buttons.
+constexpr float kProfileButtonSpacing = 8; // dp between the two buttons.
+constexpr float kProfileBottom = 20;       // dp below the buttons.
+constexpr float kAccountRow = 64;          // dp
+constexpr float kSwitcherAvatar = 40;      // dp
+constexpr float kActionRow = 56;           // dp
+constexpr float kSheetTop = 24;            // dp
 
 } // namespace
 
@@ -45,7 +52,7 @@ void App::switchAccount(std::size_t index) {
 float App::drawAccountHeader(Frame& frame, ImVec2 origin, float width) {
     const Canvas& c = frame.canvas;
     const Canvas medium = c.with(Weight::Medium);
-    const float gutter = c.dp(theme::kGutter);
+    const float margin = c.dp(kProfileMargin);
     const float avatar = c.dp(kHeaderAvatar);
     const auto accounts = m_session.accounts();
     if (accounts.empty()) {
@@ -53,11 +60,13 @@ float App::drawAccountHeader(Frame& frame, ImVec2 origin, float width) {
     }
     const auto& me = accounts[std::min(m_session.activeAccount(), accounts.size() - 1)];
 
-    float y = origin.y + gutter;
-    drawAvatar(frame, me.photo, me.name, {origin.x + gutter + avatar * 0.5f, y + avatar * 0.5f},
+    // Measured on the official app: a 72 dp photo 16 dp from the edge, the name (24 sp, bold)
+    // and the handle (14 sp) beside it, centred on it.
+    float y = origin.y + c.dp(kProfileTop);
+    drawAvatar(frame, me.photo, me.name, {origin.x + margin + avatar * 0.5f, y + avatar * 0.5f},
                kHeaderAvatar);
-    const float textX = origin.x + gutter * 2 + avatar;
-    const float textWidth = origin.x + width - gutter - textX;
+    const float textX = origin.x + margin * 2 + avatar;
+    const float textWidth = origin.x + width - margin - textX;
     const float block = c.lineHeight(theme::kHeadlineSize) + c.lineHeight(theme::kCaptionSize);
     const float textTop = y + (avatar - block) * 0.5f;
     c.with(theme::kHeadingWeight)
@@ -65,27 +74,53 @@ float App::drawAccountHeader(Frame& frame, ImVec2 origin, float width) {
               me.name.empty() ? me.byline : me.name);
     c.line({textX, textTop + c.lineHeight(theme::kHeadlineSize)}, textWidth, theme::kCaptionSize,
            theme::kTextSecondary, me.handle.empty() ? me.byline : me.handle);
-    y += avatar + gutter;
+    y += avatar + c.dp(kProfileButtonsGap);
 
-    // "Switch account" chip, as under the profile in the official app.
-    const float chip = c.dp(theme::kChipHeight);
-    const std::string_view label = tr(Text::SwitchAccount);
-    const float chipWidth =
-        c.dp(theme::kIconSize) + gutter * 2.5f + medium.measure(theme::kCaptionSize, label).x;
-    const ImVec2 chipMin{origin.x + gutter, y};
-    const ImVec2 chipMax{chipMin.x + chipWidth, y + chip};
-    c.rect(chipMin, chipMax, theme::kSurface, theme::kPillRadius);
-    drawPressed(frame, chipMin, chipMax, theme::kPillRadius);
-    c.icon(Icon::SwitchAccount, {chipMin.x + gutter + c.dp(8), y + chip * 0.5f}, 16,
-           theme::kTextPrimary);
-    medium.text({chipMin.x + gutter * 1.5f + c.dp(16),
-                 y + (chip - c.lineHeight(theme::kCaptionSize)) * 0.5f},
-                theme::kCaptionSize, theme::kTextPrimary, label);
-    if (frame.touch.tapped(chipMin, chipMax)) {
-        later([this] { openSheet(Sheet::Accounts); });
+    // Two equal 32 dp pills: the channel (filled) and, where the official app sells Premium,
+    // the downloads (outlined).
+    const float gap = c.dp(kProfileButtonSpacing);
+    const float buttonWidth = (width - margin * 2 - gap) * 0.5f;
+    const float buttonHeight = c.dp(theme::kChipHeight);
+    const auto button = [&](ImVec2 min, std::string_view label, bool filled) {
+        const ImVec2 max{min.x + buttonWidth, min.y + buttonHeight};
+        if (filled) {
+            c.rect(min, max, theme::kTextPrimary, theme::kChipHeight * 0.5f);
+        } else {
+            c.list()->AddRect(min, max, theme::kOutline, buttonHeight * 0.5f, c.dp(1));
+        }
+        drawPressed(frame, min, max, theme::kChipHeight * 0.5f);
+        const ImVec2 extent = medium.measure(theme::kBodySize, label);
+        medium.text({(min.x + max.x - extent.x) * 0.5f, (min.y + max.y - extent.y) * 0.5f},
+                    theme::kBodySize, filled ? theme::kTextOnLight : theme::kTextPrimary, label);
+        return frame.touch.tapped(min, max);
+    };
+    if (button({origin.x + margin, y}, tr(Text::ViewChannel), true)) {
+        later([this, handle = me.handle] { openOwnChannel(handle); });
     }
-    y += chip + gutter;
+    if (button({origin.x + margin + buttonWidth + gap, y}, tr(Text::Downloads), false)) {
+        later([this] { openDownloads(); });
+    }
+    y += buttonHeight + c.dp(kProfileBottom);
     return y - origin.y;
+}
+
+void App::openOwnChannel(const std::string& handle) {
+    if (!m_ownChannelId.empty()) {
+        openChannel(m_ownChannelId, {});
+        return;
+    }
+    // The account list gives the handle only; it resolves to the channel once.
+    m_tasks.run([this, handle] {
+        auto id = m_api.channelIdOf(handle);
+        m_tasks.post([this, id = std::move(id)]() mutable {
+            if (!id) {
+                showToast(friendlyError(id.error().message));
+                return;
+            }
+            m_ownChannelId = std::move(*id);
+            openChannel(m_ownChannelId, {});
+        });
+    });
 }
 
 float App::accountsSheetHeight(const Canvas& c) const {

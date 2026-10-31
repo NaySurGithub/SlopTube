@@ -41,6 +41,8 @@ struct Feed {
     bool loaded = false;
     std::string error;
     Scroller scroller;
+    // Items to show, when the feed is filtered (Subscriptions' chips); applied to every page.
+    std::function<bool(const innertube::Item&)> keep;
 };
 
 enum class ItemStyle : std::uint8_t {
@@ -63,13 +65,17 @@ struct ListInsert {
     std::function<void(Frame&, ImVec2 origin, float width)> draw;
 };
 
+// A tap on a card's ••• goes to `menu` instead, when given.
 std::optional<std::size_t> drawList(Frame& frame, Feed& feed, ItemStyle style, ImVec2 min,
                                     ImVec2 max, const ListHeader& header,
                                     const std::function<void()>& nearEnd,
-                                    std::span<const ListInsert> inserts = {});
+                                    std::span<const ListInsert> inserts = {},
+                                    std::optional<std::size_t>* menu = nullptr);
 
-// Horizontally scrolling strip of small tiles; returns the tapped item.
-std::optional<std::size_t> drawShelf(Frame& frame, Feed& feed, ImVec2 origin, float width);
+// Horizontally scrolling strip of small tiles; returns the tapped item. A tap on a tile's •••
+// goes to `menu` instead, when given.
+std::optional<std::size_t> drawShelf(Frame& frame, Feed& feed, ImVec2 origin, float width,
+                                     std::optional<std::size_t>* menu = nullptr);
 [[nodiscard]] float shelfHeight(const Frame& frame);
 
 // Remote image centre-cropped into the box, fading in once loaded.
