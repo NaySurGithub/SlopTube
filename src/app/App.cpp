@@ -287,6 +287,25 @@ std::int32_t App::onInput(const AInputEvent* event) {
     if (AInputEvent_getType(event) != AINPUT_EVENT_TYPE_KEY) {
         return 0;
     }
+    // The device's own buttons are the system's: volume, media keys, camera...
+    switch (AKeyEvent_getKeyCode(event)) {
+    case AKEYCODE_VOLUME_UP:
+    case AKEYCODE_VOLUME_DOWN:
+    case AKEYCODE_VOLUME_MUTE:
+    case AKEYCODE_MUTE:
+    case AKEYCODE_MEDIA_PLAY_PAUSE:
+    case AKEYCODE_MEDIA_PLAY:
+    case AKEYCODE_MEDIA_PAUSE:
+    case AKEYCODE_MEDIA_NEXT:
+    case AKEYCODE_MEDIA_PREVIOUS:
+    case AKEYCODE_MEDIA_STOP:
+    case AKEYCODE_HEADSETHOOK:
+    case AKEYCODE_CAMERA:
+    case AKEYCODE_POWER:
+        return 0;
+    default:
+        break;
+    }
     if (AKeyEvent_getKeyCode(event) == AKEYCODE_BACK) {
         if (!canGoBack()) {
             return 0; // Let the system close the activity.
