@@ -703,6 +703,12 @@ Channel channel(Element root) {
                     break;
                 }
             }
+            // The whole 16:9 image comes; phones show its middle, the area every device shows
+            // (1546 x 423 of 2560 x 1440), as the mobile site crops it.
+            constexpr std::string_view kWhole = "fcrop64=1,00000000ffffffff";
+            if (const auto at = result.banner.find(kWhole); at != std::string::npos) {
+                result.banner.replace(at, kWhole.size(), "fcrop64=1,32b75a57cd48a5a8");
+            }
         }
 
         // Subtitle items: "@handle", separators, subscriber count.
@@ -888,6 +894,86 @@ Item compactPlaylist(Element node) {
 }
 
 } // namespace
+
+namespace {
+
+// The target of a "youtube.com/redirect?...&q=<url>" link, or the link itself.
+std::string redirectTarget(std::string_view url) {
+    const auto query =
+        url.find("&q=") != std::string_view::npos ? url.find("&q=") : url.find("?q=");
+    if (!url.contains("/redirect") || query == std::string_view::npos) {
+        return std::string(url);
+    }
+    std::string_view value = url.substr(query + 3);
+    value = value.substr(0, value.find('&'));
+    std::string target;
+    for (std::size_t i = 0; i < value.size(); ++i) {
+        if (value[i] == '%' && i + 2 < value.size()) {
+            const auto hex = [](char ch) {
+                return ch >= 'a' ? ch - 'a' + 10 : ch >= 'A' ? ch - 'A' + 10 : ch - '0';
+            };
+            target += static_cast<char>(hex(value[i + 1]) * 16 + hex(value[i + 2]));
+            i += 2;
+        } else {
+            target += value[i] == '+' ? ' ' : value[i];
+        }
+    }
+    return target;
+}
+
+} // namespace
+
+void channelAbout(Element root, Channel& channel) {
+    json::forEachKey(root, "pageHeaderViewModel", [&](Element header) {
+        channel.description = std::string(
+            json::string(header, "/description/descriptionPreviewViewModel/description/content"));
+        while (channel.description.ends_with(' ') || channel.description.ends_with('\n')) {
+            channel.description.pop_back();
+        }
+        channel.verified =
+            json::string(header, "/title/dynamicTextViewModel/text/attachmentRuns/0/element/type/"
+                                 "imageType/image/sources/0/clientResource/imageName")
+                .starts_with("CHECK_CIRCLE");
+        // Rows: "@handle", then "subscribers • videos".
+        simdjson::dom::array rows;
+        if (!header.at_pointer("/metadata/contentMetadataViewModel/metadataRows")
+                 .get_array()
+                 .get(rows)) {
+            for (const auto row : rows) {
+                simdjson::dom::array parts;
+                if (!row.at_pointer("/metadataParts").get_array().get(parts) && parts.size() > 1) {
+                    channel.videoCount =
+                        std::string(json::string(parts.at(parts.size() - 1), "/text/content"));
+                }
+            }
+        }
+        const std::string_view link =
+            json::string(header, "/attribution/attributionViewModel/text/content");
+        std::string_view more =
+            json::string(header, "/attribution/attributionViewModel/suffix/content");
+        if (!link.empty()) {
+            channel.links = std::string(link);
+            while (channel.links.starts_with(' ')) {
+                channel.links.erase(0, 1);
+            }
+            if (!more.empty()) {
+                channel.links += ' ';
+                channel.links += more;
+            }
+            channel.linkUrl = redirectTarget(
+                json::string(header, "/attribution/attributionViewModel/text/commandRuns/0/onTap/"
+                                     "innertubeCommand/urlEndpoint/url"));
+        }
+    });
+    json::forEachKey(root, "tabRenderer", [&](Element renderer) {
+        const auto url = json::string(renderer, "/endpoint/commandMetadata/webCommandMetadata/url");
+        for (std::size_t i = 0; i < kChannelTabPaths.size(); ++i) {
+            if (url.ends_with(kChannelTabPaths[i])) {
+                channel.tabs.push_back(static_cast<ChannelTab>(i));
+            }
+        }
+    });
+}
 
 Page channelTab(Element root, std::optional<ChannelTab> tab) {
     Page page;

@@ -31,6 +31,8 @@ namespace sloptube::innertube::parser {
 [[nodiscard]] CommentPage comments(json::Element root);
 
 [[nodiscard]] Channel channel(json::Element root);
+// Adds what only the mobile site's channel page has (description, links, tabs) to `channel`.
+void channelAbout(json::Element root, Channel& channel);
 
 [[nodiscard]] std::vector<Account> accounts(json::Element root);
 

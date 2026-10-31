@@ -127,7 +127,7 @@ CompactMeta compactMeta(std::string_view source) {
         {" semaine", " sem."},
         {" ans", " a"},
         {" an", " a"},
-        {" mois", " mois"},
+        {" mois", " m."},
     }};
     for (const auto& [unit, shortUnit] : kUnits) {
         if (meta.age.ends_with(unit)) {
@@ -137,6 +137,45 @@ CompactMeta compactMeta(std::string_view source) {
     }
     return meta;
 }
+
+} // namespace
+
+void drawCompactMeta(Frame& frame, const Item& item, std::string_view channel, ImVec2 at,
+                     float width) {
+    // The channel, then ▷ and the views, then the age, spaced apart without separators.
+    const Canvas& c = frame.canvas;
+    const Canvas label = c.with(theme::kLabelWeight);
+    const float right = at.x + width;
+    float x = at.x;
+    const auto segment = [&](std::string_view text) {
+        if (text.empty() || x >= right) {
+            return;
+        }
+        label.line({x, at.y}, right - x, theme::kCaptionSize, theme::kTextSecondary, text);
+        x += label.measure(theme::kCaptionSize, text).x + c.dp(kCardMetaSpacing);
+    };
+    const CompactMeta meta = compactMeta(item.detail);
+    segment(channel);
+    if (!meta.views.empty() && x < right) {
+        const float size = c.dp(kViewsIcon);
+        const float centerY = at.y + c.lineHeight(theme::kCaptionSize) * 0.5f;
+        c.list()->AddTriangle({x, centerY - size * 0.5f}, {x, centerY + size * 0.5f},
+                              {x + size * 0.9f, centerY}, theme::kTextSecondary, c.dp(1.2f));
+        x += size + c.dp(2);
+        segment(meta.views);
+    }
+    segment(meta.age);
+}
+
+std::string compactDetail(std::string_view detail) {
+    const CompactMeta meta = compactMeta(detail);
+    if (meta.views.empty()) {
+        return meta.age;
+    }
+    return meta.views + " \u00B7 " + meta.age;
+}
+
+namespace {
 
 bool drawCard(Frame& frame, const Item& item, ImVec2 origin, float width) {
     const Canvas& c = frame.canvas;
@@ -165,29 +204,8 @@ bool drawCard(Frame& frame, const Item& item, ImVec2 origin, float width) {
     c.icon(Icon::MoreHorizontal, {menuX, top + c.lineHeight(theme::kTitleSize) * 0.5f}, 20,
            theme::kTextPrimary);
 
-    // The channel, then ▷ and the views, then the age, spaced apart without separators.
-    const Canvas label = c.with(theme::kLabelWeight);
-    const float metaY = top + titleHeight + c.dp(kCardMetaGap);
-    float x = textX;
-    const auto segment = [&](std::string_view text) {
-        if (text.empty() || x >= textX + textWidth) {
-            return;
-        }
-        label.line({x, metaY}, textX + textWidth - x, theme::kCaptionSize, theme::kTextSecondary,
-                   text);
-        x += label.measure(theme::kCaptionSize, text).x + c.dp(kCardMetaSpacing);
-    };
-    const CompactMeta meta = compactMeta(item.detail);
-    segment(item.channel);
-    if (!meta.views.empty() && x < textX + textWidth) {
-        const float size = c.dp(kViewsIcon);
-        const float centerY = metaY + c.lineHeight(theme::kCaptionSize) * 0.5f;
-        c.list()->AddTriangle({x, centerY - size * 0.5f}, {x, centerY + size * 0.5f},
-                              {x + size * 0.9f, centerY}, theme::kTextSecondary, c.dp(1.2f));
-        x += size + c.dp(2);
-        segment(meta.views);
-    }
-    segment(meta.age);
+    drawCompactMeta(frame, item, item.channel, {textX, top + titleHeight + c.dp(kCardMetaGap)},
+                    textWidth);
 
     const float target = c.dp(kIconTarget) * 0.5f;
     return frame.touch.tapped({menuX - target, top - c.dp(8)}, {menuX + target, top + target * 2});

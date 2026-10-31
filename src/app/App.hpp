@@ -114,7 +114,13 @@ struct ChannelPage {
     std::array<std::shared_ptr<Feed>, 4> tabs; // Loaded when first shown.
     float headerHeight = 0;                    // Measured on the previous frame.
     Scroller tabScroller{Axis::Horizontal};
-    float tabsWidth = 0; // Of the chip row, measured on the previous frame.
+    float tabsWidth = 0; // Of the tab row, measured on the previous frame.
+    bool descriptionOpen = false;
+    // Measured on the previous frame, from the header's top: where the name ends (the bar shows
+    // it once scrolled past) and where the tabs start (they stay under the bar from there).
+    float nameBottom = 0;
+    float tabsTop = 0;
+    std::vector<bool> expanded; // Per home shelf: listed whole instead of its first rows.
 };
 
 // The chat of the live stream being watched, polled while it is shown.
@@ -453,6 +459,13 @@ private:
     // The signed-in account's own channel ("View channel").
     void openOwnChannel(const std::string& handle);
     void openChannel(std::string channelId, std::string name);
+    void drawChannelBar(Frame& frame, const ChannelPage& page, ImVec2 origin, float width,
+                        bool named);
+    [[nodiscard]] float drawChannelTabs(Frame& frame, const std::shared_ptr<ChannelPage>& page,
+                                        ImVec2 origin, float width);
+    void drawChannelHome(Frame& frame, const std::shared_ptr<ChannelPage>& page, ImVec2 min,
+                         ImVec2 max);
+    void openSearch();
     void openSheet(Sheet sheet);
     void closeSheet();
     void showToast(std::string_view text);

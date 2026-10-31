@@ -49,6 +49,8 @@ enum class Icon : std::uint8_t {
     InsertUp,       // An arrow to the top left: completes the query with a suggestion.
     Bell,           // Notifications.
     Mic,            // Voice search.
+    Link,           // Two chain links: a channel's links.
+    Verified,       // A check in a disc: a verified channel.
     ChevronDown,    // Opens a list ("Accounts").
     MoreVertical,   // ⋮ Actions of a video card.
     MoreHorizontal, // ••• Actions of a shelf tile or a list row.

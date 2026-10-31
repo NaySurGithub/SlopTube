@@ -1199,6 +1199,13 @@ void App::drawTab(Frame& frame, ImVec2 min, ImVec2 max) {
     frame.canvas.rect({min.x, max.y}, {max.x, max.y + m_insets.bottom}, theme::kBackground);
 }
 
+void App::openSearch() {
+    m_query.fill(0);
+    m_focusSearch = true;
+    m_filtersOpen = false;
+    push(Screen{.route = Route::Search});
+}
+
 void App::drawHomeBar(Frame& frame, ImVec2 origin, float width) {
     const Canvas& c = frame.canvas;
     const float height = m_insets.top + c.dp(theme::kTopBarHeight);
@@ -1241,12 +1248,7 @@ void App::drawHomeBar(Frame& frame, ImVec2 origin, float width) {
         c.text({at.x + accent.x, at.y}, theme::kWordmarkSize, theme::kTextPrimary, kWordmarkRest);
     }
     if (iconButton(frame, Icon::Search, {nextIcon(), centerY}, theme::kTextPrimary)) {
-        later([this] {
-            m_query.fill(0);
-            m_focusSearch = true;
-            m_filtersOpen = false;
-            push(Screen{.route = Route::Search});
-        });
+        later([this] { openSearch(); });
     }
     if (m_session.signedIn()) {
         const ImVec2 bell{nextIcon(), centerY};

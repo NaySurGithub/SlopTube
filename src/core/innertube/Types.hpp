@@ -280,6 +280,13 @@ struct Channel {
     ChannelSummary summary;
     std::string banner;
     std::vector<Shelf> shelves;
+    // From the mobile site's header, empty when it could not be read.
+    std::string description;
+    std::string videoCount; // Localised, e.g. "1.1K videos".
+    std::string links;      // e.g. "Instagram and 3 more links".
+    std::string linkUrl;    // The first link.
+    bool verified = false;
+    std::vector<ChannelTab> tabs; // The tabs the channel has; empty when unknown.
 };
 
 // A YouTube identity available to the signed-in Google account.

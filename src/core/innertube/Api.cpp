@@ -388,6 +388,12 @@ Result<Channel> Api::channel(std::string_view channelId) {
     }
     auto result = parser::channel(*root);
     result.summary.id = channelId;
+    // The description, links and tabs come from the mobile site; the page shows without them.
+    auto about = openBody();
+    about.field("browseId", channelId);
+    if (const auto page = checked(Endpoint::ChannelTab, ClientKind::Mweb, std::move(about))) {
+        parser::channelAbout(*page, result);
+    }
     return result;
 }
 

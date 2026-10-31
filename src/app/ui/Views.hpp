@@ -77,6 +77,16 @@ std::optional<std::size_t> drawList(Frame& frame, Feed& feed, ItemStyle style, I
 
 // Horizontally scrolling strip of small tiles; returns the tapped item. A tap on a tile's •••
 // goes to `menu` instead, when given.
+// The duration (or "LIVE") in the bottom right corner of a picture ending at `thumbnailMax`.
+void drawDurationBadge(Frame& frame, std::string_view text, ImVec2 thumbnailMax);
+
+// "channel ▷views  age", the official app's compact metadata, from `item.detail`; `channel` may be
+// empty.
+void drawCompactMeta(Frame& frame, const innertube::Item& item, std::string_view channel, ImVec2 at,
+                     float width);
+// "views · age" in the same compact form.
+[[nodiscard]] std::string compactDetail(std::string_view detail);
+
 std::optional<std::size_t> drawShelf(Frame& frame, Feed& feed, ImVec2 origin, float width,
                                      std::optional<std::size_t>* menu = nullptr);
 [[nodiscard]] float shelfHeight(const Frame& frame);

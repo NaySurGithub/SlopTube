@@ -340,6 +340,8 @@ int channel(innertube::Api& api, std::string_view channelId) {
     const auto& summary = info->summary;
     std::println("{} {} · {} · subscribed: {}\navatar {}\nbanner {}", summary.name, summary.handle,
                  summary.subscribers, summary.subscribed, summary.avatar, info->banner);
+    std::println("verified: {} · {} · {} ({})\n{}\ntabs: {}", info->verified, info->videoCount,
+                 info->links, info->linkUrl, info->description, info->tabs.size());
     for (const auto& shelf : info->shelves) {
         std::println("\n[{}] {} items", shelf.title, shelf.items.size());
         for (const auto& item : shelf.items) {

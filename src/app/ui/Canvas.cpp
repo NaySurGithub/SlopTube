@@ -271,6 +271,16 @@ void Canvas::icon(Icon icon, ImVec2 c, float sizeDp, ImU32 color) const {
         m_list->AddTriangleFilled(p(-2, -3.5f), p(-2, 3.5f), p(3.5f, 0), color);
         break;
     }
+    case Icon::Link:
+        // Two rounded links overlapping side by side.
+        m_list->AddRect(p(-11, -4.5f), p(1.5f, 4.5f), color, unit * 4.5f, stroke);
+        m_list->AddRect(p(-1.5f, -4.5f), p(11, 4.5f), color, unit * 4.5f, stroke);
+        break;
+    case Icon::Verified:
+        m_list->AddCircleFilled(c, unit * 10, color);
+        m_list->AddLine(p(-5, 0), p(-1.5f, 4), theme::kBackground, stroke * 1.2f);
+        m_list->AddLine(p(-1.5f, 4), p(5.5f, -4), theme::kBackground, stroke * 1.2f);
+        break;
     case Icon::Mic:
         // A capsule in a cradle on a stem.
         m_list->AddRectFilled(p(-3.5f, -10), p(3.5f, 2.5f), color, unit * 3.5f);
