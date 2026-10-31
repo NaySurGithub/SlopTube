@@ -18,12 +18,10 @@ using innertube::Comment;
 using innertube::Rating;
 using innertube::toggled;
 
-constexpr std::string_view kMetaGap = "  ";
 constexpr std::string_view kBullet = " • ";
 constexpr float kChannelRowHeight = 48;  // dp
 constexpr float kActionHeight = 36;      // dp, comment action row and rating pill.
 constexpr float kActionIcon = 18;        // dp
-constexpr float kActionGap = 8;          // dp between the action row's pills.
 constexpr float kRowHeight = 48;         // dp, header and input rows of sheets.
 constexpr float kEstimatedComment = 120; // dp, height assumed for rows not yet drawn.
 constexpr int kCollapsedCommentLines = 4;
@@ -32,6 +30,30 @@ constexpr int kDescriptionLines = 1000;
 // Ids of comments shown optimistically before the server has assigned them one.
 constexpr std::string_view kLocalCommentPrefix = "local:";
 constexpr float kPopFrom = 0.6f; // Scale the rating icon pops from.
+// The header, as measured on the official app.
+constexpr float kTitleTop = 18;          // dp from the player to the title.
+constexpr float kMetaTop = 9;            // dp from the title to "@handle  likes  views  date".
+constexpr float kMetaSpacing = 7;        // dp between the line's parts.
+constexpr float kActionsTop = 16.5f;     // dp from that line to the action row.
+constexpr float kActionsHeight = 32;     // dp
+constexpr float kOwnerAvatar = 32;       // dp
+constexpr float kOwnerGap = 8;           // dp from the avatar to the subscription pill.
+constexpr float kBellPillWidth = 57;     // dp
+constexpr float kBellX = 21;             // dp from the pill's left edge to the bell's centre.
+constexpr float kBellChevronX = 39;      // dp to the chevron's centre.
+constexpr float kBellIcon = 15.5f;       // dp
+constexpr float kChevronIcon = 17.5f;    // dp
+constexpr float kSubscribePadding = 14;  // dp each side of "Subscribe".
+constexpr float kActionsRight = 20.5f;   // dp from the right edge to the centre of "more".
+constexpr float kActionsSpacing = 40.7f; // dp between icon centres.
+constexpr float kTeaserHeight = 81;      // dp, the comments card.
+constexpr float kTeaserTitleTop = 10.5f; // dp above "Comments".
+constexpr float kTeaserTextGap = 9.5f;   // dp from "Comments" to the comment.
+constexpr float kTeaserTextSize = 13;    // sp
+constexpr float kTeaserAvatar = 22;      // dp
+constexpr float kTeaserAvatarX = 14;     // dp from the card's left edge.
+constexpr float kTeaserTextX = 8.5f;     // dp from the avatar to the comment.
+constexpr float kCardTop = 16;           // dp from the action row to the comments card.
 
 bool tappedWithin(Frame& frame, ImVec2 min, ImVec2 max, ImVec2 clipMin, ImVec2 clipMax) {
     return frame.touch.tapped({std::max(min.x, clipMin.x), std::max(min.y, clipMin.y)},
@@ -58,154 +80,135 @@ float App::drawWatchHeader(Frame& frame, ImVec2 origin, float width) {
     const std::string& title =
         info ? info->title : (m_watch.details ? m_watch.details->title : m_watch.item.title);
 
-    float y = origin.y + gutter;
-    const float top = y;
+    // As measured on the official app: the title, then one line of "@handle  likes  views  date
+    // more" opening the description.
+    float y = origin.y + c.dp(kTitleTop);
+    const float top = origin.y;
     y += c.with(theme::kHeadingWeight)
              .paragraph({origin.x + gutter, y}, textWidth, theme::kWatchTitleSize,
                         theme::kTextPrimary, title, 2);
-    y += c.dp(4);
-    std::string meta =
-        info ? info->views + std::string(kMetaGap) + info->date : m_watch.item.detail;
-    if (!m_watch.error.empty()) {
-        meta = friendlyError(m_watch.error);
+    y += c.dp(kMetaTop);
+    {
+        const float right = origin.x + width - gutter;
+        const float spacing = c.dp(kMetaSpacing);
+        const std::string_view more = tr(Text::More);
+        const float moreWidth = info ? medium.measure(theme::kCaptionSize, more).x : 0;
+        float x = origin.x + gutter;
+        // Segments are dropped whole once the line is full, "more" always fits.
+        const auto segment = [&](const Canvas& font, ImU32 color, std::string_view text) {
+            const float segmentWidth = font.measure(theme::kCaptionSize, text).x;
+            if (text.empty() || x + segmentWidth > right - moreWidth - spacing) {
+                return;
+            }
+            font.text({x, y}, theme::kCaptionSize, color, text);
+            x += segmentWidth + spacing;
+        };
+        if (!m_watch.error.empty()) {
+            c.line({x, y}, textWidth, theme::kCaptionSize, theme::kTextSecondary,
+                   friendlyError(m_watch.error));
+        } else if (info) {
+            segment(medium, theme::kTextPrimary, info->channel.handle);
+            if (info->likesAllowed && !info->likes.empty()) {
+                segment(c, theme::kTextSecondary,
+                        info->likes + ' ' + std::string(tr(Text::LikesSuffix)));
+            }
+            segment(c, theme::kTextSecondary, info->views);
+            segment(c, theme::kTextSecondary, info->date);
+            medium.text({x, y}, theme::kCaptionSize, theme::kTextPrimary, more);
+        } else {
+            c.line({x, y}, textWidth, theme::kCaptionSize, theme::kTextSecondary,
+                   m_watch.item.detail);
+        }
     }
-    const float moreWidth = medium.measure(theme::kCaptionSize, tr(Text::More)).x;
-    c.line({origin.x + gutter, y}, textWidth - moreWidth, theme::kCaptionSize,
-           theme::kTextSecondary, meta);
-    if (info) {
-        medium.text({origin.x + width - gutter - moreWidth, y}, theme::kCaptionSize,
-                    theme::kTextPrimary, tr(Text::More));
-    }
-    y += c.lineHeight(theme::kCaptionSize) + gutter;
+    y += c.lineHeight(theme::kCaptionSize);
     if (info && frame.touch.tapped({origin.x, top}, {origin.x + width, y})) {
         openSheet(Sheet::Description);
     }
+    y += c.dp(kActionsTop);
 
-    // Channel row.
-    if (info) {
-        drawChannelRow(frame, info->channel, {origin.x, y}, width);
-    } else {
-        const float avatar = c.dp(theme::kAvatarSize);
-        const std::string& channel = m_watch.item.channel;
-        drawAvatar(frame, itemAvatar(frame, m_watch.item), channel,
-                   {origin.x + gutter + avatar * 0.5f, y + c.dp(kChannelRowHeight) * 0.5f},
-                   theme::kAvatarSize);
-        medium.line({origin.x + gutter * 2 + avatar,
-                     y + (c.dp(kChannelRowHeight) - c.lineHeight(theme::kBodySize)) * 0.5f},
-                    textWidth - avatar - gutter, theme::kBodySize, theme::kTextPrimary, channel);
-    }
-    y += c.dp(kChannelRowHeight) + gutter * 0.5f;
-
-    // Action row, scrolling sideways like the official one: rating pill, Share, Download, Save.
-    // Everything but the rating works before (or without) the page's details.
+    // One row: the channel's avatar and subscription, then like, dislike, share, save and more as
+    // bare icons on the right.
     {
-        const float height = c.dp(kActionHeight);
-        const float icon = c.dp(kActionIcon);
-        const float padding = gutter;
-        const ImVec2 rowMin{origin.x, y};
-        const ImVec2 rowMax{origin.x + width, y + height};
-        auto& scroller = m_watch.actionsScroller;
-        scroller.update(frame.touch, rowMin, rowMax, m_watch.actionsWidth, frame.seconds, c.dp(1));
-        frame.animating |= scroller.moving();
-        c.list()->PushClipRect(rowMin, rowMax, true);
-        const float start = origin.x - scroller.offset();
-        float x = start + gutter;
+        const float height = c.dp(kActionsHeight);
+        const float centerY = y + height * 0.5f;
+        const float avatar = c.dp(kOwnerAvatar);
+        const ImVec2 avatarCenter{origin.x + gutter + avatar * 0.5f, centerY};
+        const innertube::ChannelSummary* channel = info ? &info->channel : nullptr;
+        drawAvatar(frame, channel ? channel->avatar : itemAvatar(frame, m_watch.item),
+                   channel ? channel->name : m_watch.item.channel, avatarCenter, kOwnerAvatar);
+        const std::string channelId = channel ? channel->id : m_watch.item.channelId;
+        const std::string channelName = channel ? channel->name : m_watch.item.channel;
+        if (!channelId.empty() &&
+            frame.touch.tapped({origin.x, y},
+                               {avatarCenter.x + avatar * 0.5f + c.dp(4), y + height})) {
+            later([this, channelId, channelName] { openChannel(channelId, channelName); });
+        }
 
-        // Rating pill: [like count | dislike].
-        if (info && info->likesAllowed) {
-            const float likesWidth = c.measure(theme::kBodySize, info->likes).x;
-            const float likeWidth =
-                padding + icon + (likesWidth > 0 ? gutter * 0.6f + likesWidth : 0) + padding;
-            const float dislikeWidth = padding * 2 + icon;
-            const ImVec2 pillMin{x, y};
-            const ImVec2 split{pillMin.x + likeWidth, y + height};
-            const ImVec2 pillMax{split.x + dislikeWidth, y + height};
-            c.rect(pillMin, pillMax, theme::kSurface, theme::kPillRadius);
-            drawPressed(frame, pillMin, split, theme::kPillRadius);
-            drawPressed(frame, {split.x, y}, pillMax, theme::kPillRadius);
-            c.list()->AddLine({split.x, y + height * 0.25f}, {split.x, y + height * 0.75f},
-                              theme::kDivider, c.dp(1));
-
-            const float pop =
-                m_watch.likePopAt < 0
-                    ? 1
-                    : kPopFrom + (1 - kPopFrom) *
-                                     motion::easeOutBack(motion::progress(
-                                         frame.time, m_watch.likePopAt, motion::kPopDuration));
-            if (pop < 1 ||
-                (m_watch.likePopAt >= 0 && frame.time - m_watch.likePopAt < motion::kPopDuration)) {
-                frame.animating = true;
-            }
-            const bool liked = info->rating == Rating::Like;
-            const bool disliked = info->rating == Rating::Dislike;
-            const ImVec2 likeCenter{pillMin.x + padding + icon * 0.5f, y + height * 0.5f};
-            const ImVec2 dislikeCenter{split.x + padding + icon * 0.5f, y + height * 0.5f};
-            {
-                motion::Layer layer(c.list());
-                c.icon(liked ? Icon::ThumbUpFilled : Icon::ThumbUp, likeCenter, kActionIcon,
+        // Subscribed: a bell pill; otherwise "Subscribe".
+        const float pillX = avatarCenter.x + avatar * 0.5f + c.dp(kOwnerGap);
+        if (info && info->channel.canSubscribe) {
+            auto& owner = info->channel;
+            if (owner.subscribed) {
+                const ImVec2 pillMin{pillX, y};
+                const ImVec2 pillMax{pillX + c.dp(kBellPillWidth), y + height};
+                c.rect(pillMin, pillMax, theme::kSurface, kActionsHeight * 0.5f);
+                drawPressed(frame, pillMin, pillMax, kActionsHeight * 0.5f);
+                c.icon(Icon::Bell, {pillX + c.dp(kBellX), centerY}, kBellIcon, theme::kTextPrimary);
+                c.icon(Icon::ChevronDown, {pillX + c.dp(kBellChevronX), centerY}, kChevronIcon,
                        theme::kTextPrimary);
-                layer.end({}, 1, liked ? pop : 1, likeCenter);
+                if (frame.touch.tapped(pillMin, pillMax)) {
+                    toggleSubscription(owner);
+                }
+            } else {
+                const std::string_view label = tr(Text::Subscribe);
+                const float pillWidth =
+                    medium.measure(theme::kBodySize, label).x + c.dp(kSubscribePadding) * 2;
+                drawSubscribeButton(frame, owner, {pillX, y}, {pillX + pillWidth, y + height});
             }
+        }
+
+        // The icons, right to left from "more".
+        float x = origin.x + width - c.dp(kActionsRight);
+        const auto action = [&](Icon icon, bool pop = false) {
+            const ImVec2 center{x, centerY};
+            const float slot = c.dp(kActionsSpacing) * 0.5f;
+            x -= c.dp(kActionsSpacing);
             {
                 motion::Layer layer(c.list());
-                c.icon(disliked ? Icon::ThumbDownFilled : Icon::ThumbDown, dislikeCenter,
-                       kActionIcon, theme::kTextPrimary);
-                layer.end({}, 1, disliked ? pop : 1, dislikeCenter);
+                c.icon(icon, center, theme::kIconSize, theme::kTextPrimary);
+                const float scale =
+                    pop && m_watch.likePopAt >= 0
+                        ? kPopFrom + (1 - kPopFrom) *
+                                         motion::easeOutBack(motion::progress(
+                                             frame.time, m_watch.likePopAt, motion::kPopDuration))
+                        : 1;
+                layer.end({}, 1, scale, center);
             }
-            medium.text({likeCenter.x + icon * 0.5f + gutter * 0.6f,
-                         y + (height - c.lineHeight(theme::kBodySize)) * 0.5f},
-                        theme::kBodySize, theme::kTextPrimary, info->likes);
-
-            if (frame.touch.tapped(pillMin, split)) {
-                rateVideo(toggled(info->rating, Rating::Like));
-            } else if (frame.touch.tapped({split.x, y}, pillMax)) {
-                rateVideo(toggled(info->rating, Rating::Dislike));
-            }
-            x = pillMax.x + c.dp(kActionGap);
-        }
-
-        // Chips: an icon and a label in a pill.
-        const auto chip = [&](Icon chipIcon, std::string_view text) {
-            const float chipWidth =
-                padding + icon + gutter * 0.5f + medium.measure(theme::kBodySize, text).x + padding;
-            const ImVec2 chipMin{x, y};
-            const ImVec2 chipMax{x + chipWidth, y + height};
-            c.rect(chipMin, chipMax, theme::kSurface, theme::kPillRadius);
-            drawPressed(frame, chipMin, chipMax, theme::kPillRadius);
-            c.icon(chipIcon, {x + padding + icon * 0.5f, y + height * 0.5f}, kActionIcon,
-                   theme::kTextPrimary);
-            medium.text({x + padding + icon + gutter * 0.5f,
-                         y + (height - c.lineHeight(theme::kBodySize)) * 0.5f},
-                        theme::kBodySize, theme::kTextPrimary, text);
-            x = chipMax.x + c.dp(kActionGap);
-            return !scroller.moving() && frame.touch.tapped(chipMin, chipMax);
+            return frame.touch.tapped({center.x - slot, y}, {center.x + slot, y + height});
         };
-        if (chip(Icon::Share, tr(Text::Share))) {
-            shareVideo(m_watch.item);
-        }
-        const auto download = m_downloads->find(m_watch.item.id);
-        std::string downloadLabel(tr(Text::Download));
-        if (download && download->state == DownloadState::Done) {
-            downloadLabel = tr(Text::Downloaded);
-        } else if (download && download->state == DownloadState::Downloading) {
-            const std::int64_t percent =
-                download->total > 0 ? download->bytes * 100 / download->total : 0;
-            downloadLabel = std::vformat(tr(Text::Percent), std::make_format_args(percent));
+        if (m_watch.likePopAt >= 0 && frame.time - m_watch.likePopAt < motion::kPopDuration) {
             frame.animating = true;
         }
-        // A broadcast has no end to download up to.
-        const bool live = m_watch.details && m_watch.details->live;
-        if (!live && chip(download && download->state == DownloadState::Done ? Icon::Downloaded
-                                                                             : Icon::Download,
-                          downloadLabel)) {
-            later([this] { openDownload(m_watch.item); });
+        if (action(Icon::MoreHorizontal)) {
+            later([this, item = m_watch.item] { openItemActions(item); });
         }
-        if (chip(Icon::Save, tr(Text::Save))) {
+        if (action(Icon::Save)) {
             later([this, id = m_watch.item.id] { openSave(id); });
         }
-        c.list()->PopClipRect();
-        m_watch.actionsWidth = x - c.dp(kActionGap) + gutter - start;
-        y += height + gutter;
+        if (action(Icon::Share)) {
+            shareVideo(m_watch.item);
+        }
+        if (info && info->likesAllowed) {
+            const bool disliked = info->rating == Rating::Dislike;
+            if (action(disliked ? Icon::ThumbDownFilled : Icon::ThumbDown, disliked)) {
+                rateVideo(toggled(info->rating, Rating::Dislike));
+            }
+            const bool liked = info->rating == Rating::Like;
+            if (action(liked ? Icon::ThumbUpFilled : Icon::ThumbUp, liked)) {
+                rateVideo(toggled(info->rating, Rating::Like));
+            }
+        }
+        y += height + c.dp(kCardTop);
     }
 
     // A live stream's chat, in place of comments: the newest message, the whole chat on a tap.
@@ -234,31 +237,30 @@ float App::drawWatchHeader(Frame& frame, ImVec2 origin, float width) {
         }
         y = cardMax.y + gutter;
     } else if (info && !info->commentsToken.empty()) {
-        // Comments teaser card.
+        // Comments teaser card, as measured on the official app.
         const float padding = gutter;
-        const float avatar = c.dp(theme::kSmallAvatarSize);
-        const float preview = std::max(avatar, c.lineHeight(theme::kCaptionSize) * 2);
+        const float avatar = c.dp(kTeaserAvatar);
+        const float preview = c.lineHeight(kTeaserTextSize) * 2;
         const ImVec2 cardMin{origin.x + gutter, y};
-        const ImVec2 cardMax{origin.x + width - gutter,
-                             y + padding * 2.5f + c.lineHeight(theme::kBodySize) + preview};
+        const ImVec2 cardMax{origin.x + width - gutter, y + c.dp(kTeaserHeight)};
         c.rect(cardMin, cardMax, theme::kSurface, theme::kCardRadius);
         drawPressed(frame, cardMin, cardMax, theme::kCardRadius);
-        float cy = y + padding;
+        float cy = y + c.dp(kTeaserTitleTop);
         medium.text({cardMin.x + padding, cy}, theme::kBodySize, theme::kTextPrimary,
                     tr(Text::Comments));
         c.text({cardMin.x + padding + medium.measure(theme::kBodySize, tr(Text::Comments)).x +
                     gutter * 0.6f,
                 cy},
                theme::kBodySize, theme::kTextSecondary, info->commentCount);
-        cy += c.lineHeight(theme::kBodySize) + padding * 0.5f;
+        cy += c.lineHeight(theme::kBodySize) + c.dp(kTeaserTextGap);
         const auto& comments = m_watch.comments;
         if (comments && !comments->comments.empty()) {
             const Comment& first = comments->comments.front();
+            const float avatarX = cardMin.x + c.dp(kTeaserAvatarX);
             drawAvatar(frame, first.avatar, first.author,
-                       {cardMin.x + padding + avatar * 0.5f, cy + avatar * 0.5f},
-                       theme::kSmallAvatarSize);
-            const float textX = cardMin.x + padding * 2 + avatar;
-            c.paragraph({textX, cy}, cardMax.x - padding - textX, theme::kCaptionSize,
+                       {avatarX + avatar * 0.5f, cy + preview * 0.5f}, kTeaserAvatar);
+            const float textX = avatarX + avatar + c.dp(kTeaserTextX);
+            c.paragraph({textX, cy}, cardMax.x - padding - textX, kTeaserTextSize,
                         theme::kTextPrimary, first.text, 2);
         } else if (comments && comments->loading) {
             c.rect({cardMin.x + padding, cy}, {cardMax.x - padding * 4, cy + c.dp(10)},

@@ -373,6 +373,12 @@ void Platform::installUpdate(const std::filesystem::path& apk) {
                           javaString(m_env, apk.string()));
 }
 
+void Platform::startVoiceSearch() {
+    const LocalFrame frame(m_env);
+    jobject activity = m_app->activity->clazz;
+    m_env->CallVoidMethod(activity, method(m_env, activity, "startVoiceSearch", "()V"));
+}
+
 innertube::Locale Platform::locale() const {
     std::array<char, 2> language{};
     std::array<char, 2> country{};

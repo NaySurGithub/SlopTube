@@ -81,6 +81,8 @@ public:
     void setUploadNotifications(bool enabled);
     // Hands the downloaded APK at `apk` to Android's installer, which asks the user to confirm.
     void installUpdate(const std::filesystem::path& apk);
+    // Opens Android's speech recognizer; what it hears comes back as a VoiceSearch bridge event.
+    void startVoiceSearch();
 
     // Colour emoji drawn by the system's text stack (android.graphics.Paint).
     [[nodiscard]] bool hasGlyph(char32_t codepoint);

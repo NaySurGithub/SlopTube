@@ -12,6 +12,18 @@
 namespace sloptube::app {
 namespace {
 
+// The search bar, as measured on the official app (dp).
+constexpr float kBackX = 28;         // Centre of the back arrow.
+constexpr float kFieldX = 56;        // Left edge of the field.
+constexpr float kFieldRight = 96.5f; // Right edge of the field, from the screen's.
+constexpr float kFieldHeight = 32;
+constexpr float kFieldTextX = 13;      // From the field's edge to the text.
+constexpr float kClearRight = 17.5f;   // Centre of the clear button, from the field's right edge.
+constexpr float kClearIcon = 17;       // The clear button's ×.
+constexpr float kFieldTextRise = 0.7f; // The text sits this much above the field's centre.
+constexpr float kMicRight = 64.5f;     // Centre of the microphone, from the screen's right edge.
+constexpr float kMoreRight = 22;       // Centre of "more".
+
 constexpr std::size_t kHistorySize = 30;
 constexpr std::size_t kHistoryShown = 10;     // Past searches listed under an empty field.
 constexpr float kSuggestionHeight = 48;       // dp
@@ -142,7 +154,6 @@ void App::drawSearch(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
     const Canvas& c = frame.canvas;
     const float bar = c.dp(theme::kTopBarHeight);
     const float centerY = min.y + bar * 0.5f;
-    const float icon = bar * 0.5f;
     const ImVec2 contentMin{min.x, min.y + bar};
 
     // The field keeps focus while typing: suggestions replace the results until it is left.
@@ -163,26 +174,55 @@ void App::drawSearch(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
         drawFeed(frame, screen.feed, ItemStyle::Card, contentMin, max, filters);
     }
 
+    // The bar, as measured on the official app: back, the rounded field with its clear button,
+    // the microphone in a circle, then more.
     c.rect({min.x, 0}, {max.x, contentMin.y}, theme::kBackground);
-    if (iconButton(frame, Icon::Back, {min.x + icon, centerY}, theme::kTextPrimary)) {
+    if (iconButton(frame, Icon::Back, {min.x + c.dp(kBackX), centerY}, theme::kTextPrimary)) {
         later([this] { goBack(); });
     }
-    // Filters apply to the results, so the button only shows with them; it is lit while any
-    // filter is on.
+    // Filters apply to the results, so "more" opens them only then; it is lit while any filter
+    // is on.
     const bool filtered = m_filters != innertube::SearchFilters{};
-    const float fieldRight =
-        typing ? max.x - c.dp(theme::kGutter) : max.x - icon * 2 - c.dp(theme::kGutter) * 0.5f;
-    if (!typing && iconButton(frame, Icon::Tune, {max.x - icon, centerY},
-                              filtered ? theme::kAccent : theme::kTextPrimary)) {
+    if (iconButton(frame, Icon::MoreVertical, {max.x - c.dp(kMoreRight), centerY},
+                   filtered ? theme::kAccent : theme::kTextPrimary) &&
+        !typing) {
         m_filtersOpen = !m_filtersOpen;
         screen.feed->scroller.reset();
     }
+    const ImVec2 mic{max.x - c.dp(kMicRight), centerY};
+    c.list()->AddCircleFilled(mic, c.dp(kFieldHeight) * 0.5f, theme::kSurface);
+    c.icon(Icon::Mic, mic, theme::kIconSize, theme::kTextPrimary);
+    if (frame.touch.tapped({mic.x - c.dp(kFieldHeight) * 0.5f, min.y},
+                           {mic.x + c.dp(kFieldHeight) * 0.5f, contentMin.y})) {
+        m_platform.startVoiceSearch();
+    }
 
-    const float fieldX = min.x + icon * 2;
-    const float fieldHeight = c.dp(theme::kSearchFieldHeight);
-    ImGui::SetCursorScreenPos({fieldX, centerY - fieldHeight * 0.5f});
-    ImGui::SetNextItemWidth(fieldRight - fieldX);
+    const float fieldX = min.x + c.dp(kFieldX);
+    const float fieldRight = max.x - c.dp(kFieldRight);
+    const float fieldHeight = c.dp(kFieldHeight);
+    c.rect({fieldX, centerY - fieldHeight * 0.5f}, {fieldRight, centerY + fieldHeight * 0.5f},
+           theme::kSurface, kFieldHeight * 0.5f);
+    const bool hasQuery = m_query[0] != '\0';
+    if (hasQuery) {
+        const ImVec2 clear{fieldRight - c.dp(kClearRight), centerY};
+        c.icon(Icon::Close, clear, kClearIcon, theme::kTextPrimary);
+        if (frame.touch.tapped({clear.x - c.dp(kClearRight), clear.y - fieldHeight * 0.5f},
+                               {fieldRight, clear.y + fieldHeight * 0.5f})) {
+            std::ranges::fill(m_query, '\0');
+            m_focusSearch = true;
+        }
+    }
+
     ImGui::PushFont(nullptr, c.dp(theme::kTitleSize));
+    const ImVec2 padding = ImGui::GetStyle().FramePadding;
+    const float textX = fieldX + c.dp(kFieldTextX);
+    ImGui::SetCursorScreenPos(
+        {textX - padding.x, centerY - ImGui::GetFrameHeight() * 0.5f - c.dp(kFieldTextRise)});
+    ImGui::SetNextItemWidth(fieldRight - c.dp(kClearRight) * 2 - textX + padding.x);
+    // The field draws only its text: the rounded background is ours.
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, IM_COL32(0, 0, 0, 0));
     if (m_focusSearch) {
         ImGui::SetKeyboardFocusHere();
         m_focusSearch = false;
@@ -190,6 +230,7 @@ void App::drawSearch(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
     const bool submitted = ImGui::InputTextWithHint(
         "##query", tr(Text::SearchHint).data(), m_query.data(), m_query.size(),
         ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+    ImGui::PopStyleColor(3);
     ImGui::PopFont();
 
     const std::string query(m_query.data());

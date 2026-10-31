@@ -5,18 +5,21 @@ import android.Manifest;
 import android.app.NativeActivity;
 import android.app.PictureInPictureParams;
 import android.app.PendingIntent;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.os.Build;
 import android.os.Bundle;
+import android.speech.RecognizerIntent;
 import android.util.Rational;
 
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
 
 // The NativeActivity the app runs in, plus what native code cannot receive by itself: intents
 // from notifications, picture-in-picture, and the playback service. Everything else is native
@@ -29,6 +32,7 @@ public final class SlopTubeActivity extends NativeActivity {
     // Picture-in-picture windows accept aspect ratios between 1:2.39 and 2.39:1.
     private static final float MAX_PIP_RATIO = 2.39f;
     private static final int NOTIFICATIONS_REQUEST = 1;
+    private static final int VOICE_REQUEST = 2;
 
     private boolean pipAllowed;
     private Rational pipAspect = new Rational(16, 9);
@@ -42,6 +46,8 @@ public final class SlopTubeActivity extends NativeActivity {
     private static native void nativePictureInPictureDismissed();
 
     private static native void nativeUpdateFailed(String reason);
+
+    private static native void nativeVoiceSearch(String query);
 
     @Override
     protected void onCreate(Bundle state) {
@@ -252,6 +258,36 @@ public final class SlopTubeActivity extends NativeActivity {
             return intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent.class);
         }
         return intent.getParcelableExtra(Intent.EXTRA_INTENT);
+    }
+
+    // --- Voice search ---------------------------------------------------------------------------
+
+    // Android's speech recognizer (the Google app's, usually); the query comes back through
+    // onActivityResult.
+    public void startVoiceSearch() {
+        runOnUiThread(() -> {
+            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                    .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                            RecognizerIntent.LANGUAGE_MODEL_WEB_SEARCH)
+                    .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+            try {
+                startActivityForResult(intent, VOICE_REQUEST);
+            } catch (ActivityNotFoundException | SecurityException unavailable) {
+                // No recognizer on this device: the microphone does nothing.
+            }
+        });
+    }
+
+    @Override
+    protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (request != VOICE_REQUEST || result != RESULT_OK || data == null) {
+            return;
+        }
+        ArrayList<String> heard = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+        if (heard != null && !heard.isEmpty() && heard.get(0) != null) {
+            nativeVoiceSearch(heard.get(0));
+        }
     }
 
     // --- Upload notifications -------------------------------------------------------------------

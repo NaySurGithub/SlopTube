@@ -55,6 +55,9 @@ enum class ItemStyle : std::uint8_t {
 struct ListHeader {
     float height = 0;
     std::function<void(Frame&, ImVec2 origin, float width)> draw;
+    // Empty space above the header and below the last item, where the list runs under bars.
+    float top = 0;
+    float bottom = 0;
 };
 
 // Full-width block scrolled between items, such as the Shorts shelf of the home feed. Inserts

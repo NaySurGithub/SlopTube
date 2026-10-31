@@ -572,6 +572,12 @@ Watch watch(Element root) {
             channel.name = text(owner, "/title");
             channel.avatar = lastThumbnail(owner, "/thumbnail/thumbnails");
             channel.subscribers = text(owner, "/subscriberCountText");
+            // "/@name", shown under the title as the official app does.
+            const std::string_view url =
+                json::string(owner, "/navigationEndpoint/browseEndpoint/canonicalBaseUrl");
+            if (url.starts_with("/@")) {
+                channel.handle = std::string(url.substr(1));
+            }
             subscribeButton(owner, channel);
         }
     });

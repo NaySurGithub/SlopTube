@@ -271,6 +271,13 @@ void Canvas::icon(Icon icon, ImVec2 c, float sizeDp, ImU32 color) const {
         m_list->AddTriangleFilled(p(-2, -3.5f), p(-2, 3.5f), p(3.5f, 0), color);
         break;
     }
+    case Icon::Mic:
+        // A capsule in a cradle on a stem.
+        m_list->AddRectFilled(p(-3.5f, -10), p(3.5f, 2.5f), color, unit * 3.5f);
+        m_list->PathArcTo(p(0, -1.5f), unit * 7, 0, std::numbers::pi_v<float>);
+        m_list->PathStroke(color, stroke);
+        m_list->AddLine(p(0, 5.5f), p(0, 10), color, stroke);
+        break;
     case Icon::Bell: {
         // A bell: rounded dome over a flared rim, the clapper below.
         m_list->PathArcTo(p(0, -2), unit * 6, std::numbers::pi_v<float>,
@@ -291,12 +298,12 @@ void Canvas::icon(Icon icon, ImVec2 c, float sizeDp, ImU32 color) const {
         break;
     case Icon::MoreVertical:
         for (const float y : {-6.0f, 0.0f, 6.0f}) {
-            m_list->AddCircleFilled(p(0, y), unit * 1.8f, color);
+            m_list->AddCircleFilled(p(0, y), unit * 2.1f, color);
         }
         break;
     case Icon::MoreHorizontal:
         for (const float x : {-6.0f, 0.0f, 6.0f}) {
-            m_list->AddCircleFilled(p(x, 0), unit * 1.8f, color);
+            m_list->AddCircleFilled(p(x, 0), unit * 2.1f, color);
         }
         break;
     case Icon::History:
@@ -389,7 +396,7 @@ void Canvas::icon(Icon icon, ImVec2 c, float sizeDp, ImU32 color) const {
     case Icon::Save:
     case Icon::SaveFilled: {
         // A bookmark: a rounded-top tab with a notch at the bottom.
-        const std::array<ImVec2, 5> outline{p(-6, -9), p(6, -9), p(6, 9), p(0, 4), p(-6, 9)};
+        const std::array<ImVec2, 5> outline{p(-7, -9), p(7, -9), p(7, 9), p(0, 4), p(-7, 9)};
         if (icon == Icon::SaveFilled) {
             m_list->AddConcavePolyFilled(outline.data(), static_cast<int>(outline.size()), color);
         } else {

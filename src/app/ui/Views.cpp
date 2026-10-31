@@ -89,12 +89,20 @@ struct CompactMeta {
     std::string age;
 };
 
-CompactMeta compactMeta(std::string_view detail) {
+CompactMeta compactMeta(std::string_view source) {
+    // The server separates numbers from their units with no-break spaces ("283\u00A0k\u00A0vues").
+    std::string detail(source);
+    for (const std::string_view space : {"\xC2\xA0", "\xE2\x80\xAF"}) {
+        for (auto at = detail.find(space); at != std::string::npos; at = detail.find(space, at)) {
+            detail.replace(at, space.size(), " ");
+        }
+    }
+    const std::string_view text = detail;
     CompactMeta meta;
-    std::string_view rest = detail;
-    if (const auto separator = detail.find(kDetailSeparator); separator != std::string_view::npos) {
-        std::string_view views = detail.substr(0, separator);
-        rest = detail.substr(separator + kDetailSeparator.size());
+    std::string_view rest = text;
+    if (const auto separator = text.find(kDetailSeparator); separator != std::string_view::npos) {
+        std::string_view views = text.substr(0, separator);
+        rest = text.substr(separator + kDetailSeparator.size());
         for (const std::string_view unit : {" de vues", " vues", " vue", " views", " view"}) {
             if (views.ends_with(unit)) {
                 meta.views = views.substr(0, views.size() - unit.size());
@@ -102,7 +110,7 @@ CompactMeta compactMeta(std::string_view detail) {
             }
         }
         if (meta.views.empty()) {
-            rest = detail; // Not a view count ("1,4 k spectateurs"): kept whole.
+            rest = text; // Not a view count ("1,4 k spectateurs"): kept whole.
         }
     }
     meta.age = rest;
@@ -426,7 +434,8 @@ std::optional<std::size_t> drawList(Frame& frame, Feed& feed, ItemStyle style, I
     for (const Item& item : feed.page.items) {
         itemsHeight += itemHeight(item);
     }
-    const float content = header.height + itemsHeight + insertsHeight + footer;
+    const float content =
+        header.top + header.height + itemsHeight + insertsHeight + footer + header.bottom;
 
     feed.scroller.update(frame.touch, min, max, content, frame.seconds, frame.dp(1));
     frame.animating |= feed.scroller.moving();
@@ -435,12 +444,12 @@ std::optional<std::size_t> drawList(Frame& frame, Feed& feed, ItemStyle style, I
     ImDrawList* list = frame.canvas.list();
     list->PushClipRect(min, max, true);
 
-    if (header.draw && offset < header.height) {
-        header.draw(frame, {min.x, min.y - offset}, width);
+    if (header.draw && offset < header.top + header.height) {
+        header.draw(frame, {min.x, min.y + header.top - offset}, width);
     }
 
     // Items and inserts are laid out top to bottom; an insert sits below `after` items.
-    float y = min.y + header.height - offset;
+    float y = min.y + header.top + header.height - offset;
     std::size_t nextInsert = 0;
     const auto drawInsertsBefore = [&](std::size_t index) {
         for (; nextInsert < inserts.size() && inserts[nextInsert].after <= index; ++nextInsert) {
@@ -482,7 +491,7 @@ std::optional<std::size_t> drawList(Frame& frame, Feed& feed, ItemStyle style, I
     }
     drawInsertsBefore(count);
 
-    const float footerTop = min.y - offset + content - footer;
+    const float footerTop = min.y - offset + content - header.bottom - footer;
     if (more && footerTop < max.y) {
         frame.canvas.spinner({min.x + width * 0.5f, footerTop + footer * 0.5f}, theme::kSpinnerSize,
                              theme::kTextSecondary, frame.time);

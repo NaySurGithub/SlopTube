@@ -1074,14 +1074,20 @@ void App::drawFeed(Frame& frame, std::shared_ptr<Feed> feed, ItemStyle style, Im
             drawOffline(frame, feed, min, max);
             return;
         }
-        if (drawFeedStatus(frame, *feed, min, max) && feed->request) {
+        if (drawFeedStatus(frame, *feed, {min.x, min.y + m_listTop},
+                           {max.x, max.y - m_listBottom}) &&
+            feed->request) {
             load(feed, feed->request);
         }
         return;
     }
+    // Under the tab bars, the list starts below the top bar and ends above the navigation bar.
+    ListHeader padded = header;
+    padded.top += m_listTop;
+    padded.bottom += m_listBottom;
     std::optional<std::size_t> menu;
     if (const auto tapped = drawList(
-            frame, *feed, style, min, max, header, [this, feed] { loadMore(feed); }, inserts,
+            frame, *feed, style, min, max, padded, [this, feed] { loadMore(feed); }, inserts,
             &menu)) {
         later([this, item = feed->page.items[*tapped],
                source = VideoSource{.feed = feed, .index = *tapped}] { openItem(item, source); });
@@ -1098,19 +1104,44 @@ void App::drawTab(Frame& frame, ImVec2 min, ImVec2 max) {
     const ImVec2 contentMin{min.x, min.y + bar};
     const ImVec2 contentMax{max.x, max.y - nav};
 
+    // As the official app, scrolling a feed down slides both bars away and scrolling up brings
+    // them back: the feed runs under them.
+    const bool collapsing = m_tab != Tab::Shorts && m_session.signedIn();
+    if (!collapsing || m_barTab != m_tab) {
+        m_barShift = 0;
+        m_barScroll = m_tabFeeds[std::to_underlying(m_tab)]->scroller.offset();
+        m_barTab = m_tab;
+    }
+    const float topShift = m_barShift;
+    const float navShift = bar > 0 ? m_barShift / bar * nav : 0;
+    // Taps and drags starting on a bar are the bar's.
+    Touch& touch = frame.touch;
+    const bool wasBlocked = touch.blocked();
+    const ImVec2 start = touch.start();
+    const bool onBars = start.y < min.y + bar - topShift || start.y >= contentMax.y + navShift;
+    if (collapsing && touch.down() && onBars) {
+        touch.setBlocked(true);
+    }
+
     const float shown =
         m_tabShownAt < 0 ? 1 : motion::progress(frame.time, m_tabShownAt, motion::kFadeDuration);
     if (shown < 1) {
         frame.animating = true;
     }
     motion::Layer layer(frame.canvas.list());
+    if (collapsing) {
+        m_listTop = bar;
+        m_listBottom = nav;
+    }
+    const ImVec2 feedMin = collapsing ? min : contentMin;
+    const ImVec2 feedMax = collapsing ? max : contentMax;
     switch (m_tab) {
     case Tab::Home:
     case Tab::Subscriptions:
         if (!m_session.signedIn()) {
             drawSignInPrompt(frame, contentMin, contentMax);
         } else if (m_tab == Tab::Subscriptions) {
-            drawSubscriptions(frame, contentMin, contentMax);
+            drawSubscriptions(frame, feedMin, feedMax);
         } else {
             auto shelves =
                 m_tab == Tab::Home ? shortsShelves(frame.canvas, width) : std::vector<ListInsert>{};
@@ -1118,27 +1149,54 @@ void App::drawTab(Frame& frame, ImVec2 min, ImVec2 max) {
                 loadPosts();
                 addPostInserts(frame.canvas, width, shelves);
             }
-            drawFeed(frame, m_tabFeeds[std::to_underlying(m_tab)], ItemStyle::Card, contentMin,
-                     contentMax, {}, shelves);
+            drawFeed(frame, m_tabFeeds[std::to_underlying(m_tab)], ItemStyle::Card, feedMin,
+                     feedMax, {}, shelves);
         }
         break;
     case Tab::You:
-        drawYou(frame, contentMin, contentMax);
+        drawYou(frame, feedMin, feedMax);
         break;
     case Tab::Shorts:
         // Full bleed under the status bar, as in the official app.
         drawShorts(frame, {min.x, 0}, contentMax);
         break;
     }
+    m_listTop = 0;
+    m_listBottom = 0;
     layer.end({}, motion::easeOutCubic(shown));
+    touch.setBlocked(wasBlocked);
     if (m_tab == Tab::Shorts) {
         drawNavigationBar(frame, {min.x, contentMax.y}, width);
         return;
     }
 
-    // Bars are drawn last so scrolled content slides underneath them.
-    drawHomeBar(frame, {min.x, 0}, width);
-    drawNavigationBar(frame, {min.x, contentMax.y}, width);
+    if (collapsing) {
+        const Scroller& scroller = m_tabFeeds[std::to_underlying(m_tab)]->scroller;
+        const float offset = scroller.offset();
+        // Follows the scroll, never hidden at the very top of the feed.
+        m_barShift =
+            std::clamp(m_barShift + offset - m_barScroll, 0.0f, std::clamp(offset, 0.0f, bar));
+        m_barScroll = offset;
+        // Once the feed rests, a bar half gone finishes hiding or showing.
+        if (!touch.down() && !scroller.moving() && m_barShift > 0 && m_barShift < bar) {
+            float hidden = m_barShift / bar;
+            frame.animating |=
+                motion::approach(hidden, hidden > 0.5f && offset >= bar ? 1 : 0, frame.seconds);
+            m_barShift = hidden * bar;
+        }
+    }
+
+    // Bars are drawn last so scrolled content slides underneath them; the top one slides under
+    // the status bar, the navigation bar off the bottom.
+    ImDrawList* list = frame.canvas.list();
+    list->PushClipRect({min.x, min.y}, {max.x, max.y}, true);
+    drawHomeBar(frame, {min.x, -topShift}, width);
+    list->PopClipRect();
+    frame.canvas.rect({min.x, 0}, {max.x, min.y}, theme::kBackground);
+    list->PushClipRect({min.x, 0}, {max.x, max.y}, true);
+    drawNavigationBar(frame, {min.x, contentMax.y + navShift}, width);
+    list->PopClipRect();
+    frame.canvas.rect({min.x, max.y}, {max.x, max.y + m_insets.bottom}, theme::kBackground);
 }
 
 void App::drawHomeBar(Frame& frame, ImVec2 origin, float width) {

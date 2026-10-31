@@ -243,9 +243,7 @@ private:
         std::shared_ptr<CommentList> replies; // Replies view of the comments sheet, if open.
         std::optional<innertube::Comment> replyParent;
         Scroller descriptionScroller;
-        float descriptionHeight = 0; // Measured on the previous frame.
-        Scroller actionsScroller{Axis::Horizontal};
-        float actionsWidth = 0;         // Measured on the previous frame.
+        float descriptionHeight = 0;    // Measured on the previous frame.
         double endedAt = -1;            // The video ended: the autoplay countdown runs from here.
         bool autoplayCancelled = false; // The countdown was cancelled for this video.
         std::shared_ptr<LiveChat> chat; // Live streams: shown in place of the comments teaser.
@@ -623,6 +621,13 @@ private:
     SplashState m_splash;
     std::array<char, 1024> m_draft{}; // Comment or reply being written.
     double m_tabShownAt = -1;
+    // How far (px) the tab bars have slid away with the scroll, and the scroll it follows.
+    float m_barShift = 0;
+    float m_barScroll = 0;
+    Tab m_barTab = Tab::Home;
+    // Space the tab bars cover above and below a tab's feed, while it is drawn.
+    float m_listTop = 0;
+    float m_listBottom = 0;
 
     std::unique_ptr<Thumbnails> m_thumbnails;
     std::unique_ptr<VectorIcons> m_icons;

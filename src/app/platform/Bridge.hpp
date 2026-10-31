@@ -28,6 +28,7 @@ struct BridgeEvent {
         PictureInPictureDismissed, // The user closed the picture-in-picture window.
         Media,                     // Notification, lock screen, headset or Bluetooth control.
         UpdateFailed,              // Installing an update failed or was declined.
+        VoiceSearch,               // Android's speech recognizer heard a query.
     };
 
     Kind kind = Kind::Media;
@@ -36,6 +37,7 @@ struct BridgeEvent {
     MediaCommand command = MediaCommand::Play; // Media.
     std::int64_t positionMs = 0;               // Media: Seek.
     std::string reason;                        // UpdateFailed, as Android words it.
+    std::string query;                         // VoiceSearch.
 };
 
 // Events arrive on Java threads, so `handler` must be thread-safe. Events sent while no handler

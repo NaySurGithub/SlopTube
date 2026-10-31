@@ -42,6 +42,7 @@ enum class Text : std::uint8_t {
     OneReply,
     ReadMore,
     More,
+    LikesSuffix,
     Description,
     Likes,
     Views,

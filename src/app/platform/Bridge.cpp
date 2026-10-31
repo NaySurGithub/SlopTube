@@ -51,6 +51,10 @@ void JNICALL updateFailed(JNIEnv* env, jclass, jstring reason) {
     dispatch({.kind = BridgeEvent::Kind::UpdateFailed, .reason = nativeString(env, reason)});
 }
 
+void JNICALL voiceSearch(JNIEnv* env, jclass, jstring query) {
+    dispatch({.kind = BridgeEvent::Kind::VoiceSearch, .query = nativeString(env, query)});
+}
+
 void JNICALL pictureInPictureDismissed(JNIEnv*, jclass) {
     dispatch({.kind = BridgeEvent::Kind::PictureInPictureDismissed});
 }
@@ -210,6 +214,8 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void*) {
                         reinterpret_cast<void*>(&pictureInPictureDismissed)},
         JNINativeMethod{"nativeUpdateFailed", "(Ljava/lang/String;)V",
                         reinterpret_cast<void*>(&updateFailed)},
+        JNINativeMethod{"nativeVoiceSearch", "(Ljava/lang/String;)V",
+                        reinterpret_cast<void*>(&voiceSearch)},
     };
     const std::array service{
         JNINativeMethod{"nativeMediaCommand", "(IJ)V", reinterpret_cast<void*>(&mediaCommand)},
