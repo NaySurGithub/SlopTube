@@ -43,8 +43,11 @@ void App::drawSettings(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
     }};
     const float gutter = c.dp(theme::kGutter);
     const float sizeBlock = row + c.dp(theme::kChipHeight) + gutter;
+    const float languageRow = c.dp(theme::kChipHeight) + gutter;
+    const float languageBlock = row + 2 * languageRow;
     const float updateRows = build::kChecksForUpdates ? 2 : 0;
-    const float content = sizeBlock + row * (static_cast<float>(kToggles.size() + 1) + updateRows) +
+    const float content = sizeBlock + languageBlock +
+                          row * (static_cast<float>(kToggles.size() + 1) + updateRows) +
                           gutter * 3 + c.lineHeight(theme::kCaptionSize);
     screen.feed->scroller.update(frame.touch, contentMin, max, content, frame.seconds, c.dp(1));
     frame.animating |= screen.feed->scroller.moving();
@@ -72,6 +75,29 @@ void App::drawSettings(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
         }
     }
     y += c.dp(theme::kChipHeight) + gutter;
+
+    (void)switchRow(frame, tr(Text::LanguageSetting), tr(Text::LanguageSettingDetail), {min.x, y},
+                    width, std::nullopt);
+    y += row;
+    constexpr std::array<Text, kLanguageChoices> kLanguageLabels{
+        Text::LanguagePhone, Text::LanguageEnglish, Text::LanguageFrench, Text::LanguageSpanish};
+    for (int choice = 0; choice < kLanguageChoices; ++choice) {
+        if (choice % 2 == 0) {
+            x = min.x + gutter;
+        }
+        const float chipY = y + (choice / 2) * languageRow;
+        const bool selected = m_settings.language == choice;
+        if (chipButton(frame, tr(kLanguageLabels[static_cast<std::size_t>(choice)]), {x, chipY},
+                       selected, x) &&
+            !selected && !screen.feed->scroller.moving()) {
+            m_settings.language = choice;
+            later([this] {
+                setLanguage(languageForChoice(m_settings.language, m_platform.locale().language));
+                applySettings();
+            });
+        }
+    }
+    y += 2 * languageRow;
 
     for (const Toggle& toggle : kToggles) {
         bool& value = m_settings.*toggle.value;
@@ -121,7 +147,7 @@ void App::drawSettings(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
            version, TextAlign::Center);
     c.list()->PopClipRect();
 
-    drawTitleBar(frame, screen.title, {min.x, 0}, width);
+    drawTitleBar(frame, tr(Text::Settings), {min.x, 0}, width);
 }
 
 } // namespace sloptube::app

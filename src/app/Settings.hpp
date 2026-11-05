@@ -8,6 +8,7 @@ namespace sloptube::app {
 // How much bigger the whole interface is drawn for each Settings::interfaceSize.
 inline constexpr std::array<float, 3> kInterfaceScales{1.0f, 1.15f, 1.3f};
 inline constexpr int kInterfaceSizes = static_cast<int>(kInterfaceScales.size());
+inline constexpr int kLanguageChoices = 4;
 
 // Preferences of the Settings screen, kept in the data directory.
 struct Settings {
@@ -18,6 +19,8 @@ struct Settings {
     bool checkUpdates = true;        // Release builds look for a newer release at launch.
     // Text and buttons: 0 normal, 1 large, 2 extra large (kInterfaceScales).
     int interfaceSize = 0;
+    // 0 follows the phone, 1 English, 2 French, 3 Spanish.
+    int language = 0;
 
     // Defaults for anything missing or unreadable.
     [[nodiscard]] static Settings load(const std::filesystem::path& file);
