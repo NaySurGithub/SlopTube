@@ -11,13 +11,18 @@ on:
     # Check hourly so the five-hour cadence continues across midnight.
     - cron: '17 * * * *'
   workflow_dispatch:
+    inputs:
+      publish_nightly:
+        description: Publish the nightly for the current main commit
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'schedule' && 'nightly' || 'ci' }}
-  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ (github.event_name == 'schedule' || inputs.publish_nightly) && 'nightly' || 'ci' }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' && !inputs.publish_nightly }}
 
 env:
   NDK_VERSION: 27.2.12479018
@@ -34,14 +39,18 @@ jobs:
         id: check
         env:
           GH_TOKEN: ${{ github.token }}
+          PUBLISH_NIGHTLY: ${{ inputs.publish_nightly }}
         run: |
-          if [[ "$GITHUB_EVENT_NAME" != schedule ]]; then
+          if [[ "$GITHUB_EVENT_NAME" != schedule && "$PUBLISH_NIGHTLY" != true ]]; then
             echo "build=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           if [[ "$GITHUB_REPOSITORY" != NaySurGithub/SlopTube ||
-                "$GITHUB_REF" != refs/heads/main ]] ||
+                "$GITHUB_REF" != refs/heads/main ]]; then
+            exit 0
+          fi
+          if [[ "$GITHUB_EVENT_NAME" == schedule ]] &&
              (( $(date -u +%s) / 3600 % 5 != 0 )); then
             exit 0
           fi
@@ -121,7 +130,7 @@ jobs:
             exit 1
           fi
       - name: Install the release key
-        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'schedule'
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'schedule' || inputs.publish_nightly)
         env:
           KEYSTORE_BASE64: ${{ secrets.SLOPTUBE_KEYSTORE_BASE64 }}
         run: |
@@ -142,7 +151,7 @@ jobs:
           SLOPTUBE_KEYSTORE_PASSWORD: ${{ secrets.SLOPTUBE_KEYSTORE_PASSWORD }}
         run: cmake --build --preset android-release
       - name: Remove the release key
-        if: always() && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'schedule')
+        if: always() && (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'schedule' || inputs.publish_nightly))
         run: rm -f "${RUNNER_TEMP}/release.keystore"
       - uses: actions/upload-artifact@v4
         with:
@@ -174,7 +183,7 @@ jobs:
 
   nightly:
     name: Publish nightly
-    if: github.event_name == 'schedule'
+    if: (github.event_name == 'schedule' || inputs.publish_nightly)
     needs: [format, cli, android]
     runs-on: ubuntu-latest
     permissions:
