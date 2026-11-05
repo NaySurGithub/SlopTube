@@ -7,22 +7,59 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
+  schedule:
+    # Check hourly so the five-hour cadence continues across midnight.
+    - cron: '17 * * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'schedule' && 'nightly' || 'ci' }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
 
 env:
   NDK_VERSION: 27.2.12479018
   CLANG_FORMAT_VERSION: 23.1.3
 
 jobs:
+  nightly-check:
+    name: Check nightly eligibility
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.check.outputs.build }}
+    steps:
+      - name: Check the schedule and release tag
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" != schedule ]]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "$GITHUB_REPOSITORY" != NaySurGithub/SlopTube ||
+                "$GITHUB_REF" != refs/heads/main ]] ||
+             (( $(date -u +%s) / 3600 % 5 != 0 )); then
+            exit 0
+          fi
+
+          # A tag per commit keeps re-runs from publishing duplicates.
+          if release=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/nightly-${GITHUB_SHA}" 2>&1); then
+            echo "This commit already has a nightly release."
+          elif [[ "$release" == *"HTTP 404"* ]]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "$release" >&2
+            exit 1
+          fi
+
   format:
     name: Format
+    needs: nightly-check
+    if: needs.nightly-check.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +72,8 @@ jobs:
 
   cli:
     name: CLI (macOS)
+    needs: nightly-check
+    if: needs.nightly-check.outputs.build == 'true'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,6 +91,8 @@ jobs:
 
   android:
     name: Android APK
+    needs: nightly-check
+    if: needs.nightly-check.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -80,7 +121,7 @@ jobs:
             exit 1
           fi
       - name: Install the release key
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'schedule'
         env:
           KEYSTORE_BASE64: ${{ secrets.SLOPTUBE_KEYSTORE_BASE64 }}
         run: |
@@ -89,7 +130,11 @@ jobs:
             exit 1
           fi
           echo "${KEYSTORE_BASE64}" | base64 --decode > "${RUNNER_TEMP}/release.keystore"
-          echo "SIGNING=-DSLOPTUBE_KEYSTORE=${RUNNER_TEMP}/release.keystore -DSLOPTUBE_KEYSTORE_PASS=env:SLOPTUBE_KEYSTORE_PASSWORD -DSLOPTUBE_UPDATES=ON" >> "$GITHUB_ENV"
+          updates=OFF
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            updates=ON
+          fi
+          echo "SIGNING=-DSLOPTUBE_KEYSTORE=${RUNNER_TEMP}/release.keystore -DSLOPTUBE_KEYSTORE_PASS=env:SLOPTUBE_KEYSTORE_PASSWORD -DSLOPTUBE_UPDATES=${updates}" >> "$GITHUB_ENV"
       - name: Configure
         run: cmake --preset android-release -DSLOPTUBE_ANDROID_NDK="$ANDROID_HOME/ndk/${NDK_VERSION}" ${SIGNING}
       - name: Build APK
@@ -97,7 +142,7 @@ jobs:
           SLOPTUBE_KEYSTORE_PASSWORD: ${{ secrets.SLOPTUBE_KEYSTORE_PASSWORD }}
         run: cmake --build --preset android-release
       - name: Remove the release key
-        if: always() && startsWith(github.ref, 'refs/tags/v')
+        if: always() && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'schedule')
         run: rm -f "${RUNNER_TEMP}/release.keystore"
       - uses: actions/upload-artifact@v4
         with:
@@ -126,3 +171,28 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" "${apk}" "${apk}.sha256" \
             --repo "${GITHUB_REPOSITORY}" --title "SlopTube ${GITHUB_REF_NAME#v}" \
             --generate-notes --verify-tag
+
+  nightly:
+    name: Publish nightly
+    if: github.event_name == 'schedule'
+    needs: [format, cli, android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: SlopTube-${{ github.sha }}
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="nightly-${GITHUB_SHA}"
+          short_sha="${GITHUB_SHA:0:12}"
+          apk="SlopTube-nightly-${short_sha}.apk"
+          mv SlopTube.apk "${apk}"
+          sha256sum "${apk}" > "${apk}.sha256"
+          gh release create "${tag}" "${apk}" "${apk}.sha256" \
+            --repo "${GITHUB_REPOSITORY}" --target "${GITHUB_SHA}" \
+            --title "SlopTube Nightly (${short_sha})" --notes "Build of main at ${GITHUB_SHA}." \
+            --prerelease --latest=false
