@@ -164,7 +164,10 @@ void App::drawSearch(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
         ListHeader filters;
         if (m_filtersOpen) {
             filters = ListHeader{
-                .height = m_searchFiltersHeight,
+                // The list draws a header only where it has height, and its height is measured
+                // when drawn: a first-frame estimate lets it be drawn, and measured, at all.
+                .height =
+                    m_searchFiltersHeight > 0 ? m_searchFiltersHeight : c.dp(theme::kChipHeight),
                 .draw =
                     [this, &screen](Frame& f, ImVec2 origin, float w) {
                         m_searchFiltersHeight = drawSearchFilters(f, screen, origin, w);
