@@ -44,6 +44,14 @@ Only formats with a direct `url` are used; ciphered formats are skipped. A broad
 | `LiveSource` | The segments of a live stream, fetched in order a few ahead of the one being demuxed (see [Live streams](#live-streams)) |
 | `Log.hpp` | The single logcat tag |
 
+### Audio only
+
+The player menu's "Audio only" plays the audio stream alone, and the choice is kept for later
+videos. `Player::open(..., audioOnly)` makes the audio stream the session's main input, as a muxed
+stream would be, so no video is downloaded or decoded and the thumbnail stands in for the picture.
+`setAudioOnly` switches an open video by starting a session again at the same position. Live and
+muxed streams have no audio stream to play alone and keep their picture; Shorts always have it.
+
 ### Quality
 
 `Player::qualities()` lists what the video offers. Other calls:

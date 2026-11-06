@@ -529,6 +529,8 @@ private:
                   std::optional<Icon> icon = std::nullopt);
     // Draws the video in fullscreen, zoomed by pinching, with the zoom indicators over it.
     void drawZoomableVideo(Frame& frame, ImVec2 min, ImVec2 max);
+    void drawAudioPoster(Frame& frame, ImVec2 min, ImVec2 max); // In the picture's place.
+    void setAudioOnly(bool audioOnly);
 
     // Centred panel of rows over the player; returns the tapped row. Taps outside close it.
     struct MenuRow {

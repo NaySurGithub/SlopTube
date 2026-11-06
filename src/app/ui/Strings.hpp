@@ -188,6 +188,7 @@ enum class Text : std::uint8_t {
     AppearancePhone,
     AppearanceLight,
     AppearanceDark,
+    AudioOnly,
     Count,
 };
 

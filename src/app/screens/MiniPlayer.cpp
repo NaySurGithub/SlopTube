@@ -164,6 +164,7 @@ void App::drawMiniPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
            {windowMax.x + shadow * 0.5f, windowMax.y + shadow}, kShadowColor, kShadow);
     c.rect(windowMin, windowMax, IM_COL32_BLACK, theme::kCornerRadius);
     m_videoSurface->draw(list, windowMin, windowMax);
+    drawAudioPoster(frame, windowMin, windowMax);
 
     const auto state = m_player.state();
     const float duration = static_cast<float>(m_player.durationUs());

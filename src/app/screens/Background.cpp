@@ -186,6 +186,7 @@ void App::drawPictureInPicture(Frame& frame, ImVec2 display) {
     const Canvas& c = frame.canvas;
     c.rect({0, 0}, display, IM_COL32_BLACK);
     m_videoSurface->draw(c.list(), {0, 0}, display);
+    drawAudioPoster(frame, {0, 0}, display);
     const auto state = m_player.state();
     if (state == media::PlayerState::Loading || m_player.buffering()) {
         c.spinner({display.x * 0.5f, display.y * 0.5f}, theme::kSpinnerSize, theme::g_textPrimary,

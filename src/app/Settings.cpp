@@ -28,6 +28,7 @@ Settings Settings::load(const std::filesystem::path& file) {
     read("/autoplay", settings.autoplay);
     read("/uploadNotifications", settings.uploadNotifications);
     read("/checkUpdates", settings.checkUpdates);
+    read("/audioOnly", settings.audioOnly);
     settings.interfaceSize = static_cast<int>(
         std::clamp<std::int64_t>(json::integer(*root, "/interfaceSize"), 0, kInterfaceSizes - 1));
     const auto language = json::integer(*root, "/language");
@@ -47,6 +48,7 @@ void Settings::save(const std::filesystem::path& file) const {
         .field("autoplay", autoplay)
         .field("uploadNotifications", uploadNotifications)
         .field("checkUpdates", checkUpdates)
+        .field("audioOnly", audioOnly)
         .field("interfaceSize", static_cast<std::int64_t>(interfaceSize))
         .field("language", static_cast<std::int64_t>(language))
         .field("appearance", static_cast<std::int64_t>(appearance))
