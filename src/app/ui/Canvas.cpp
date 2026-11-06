@@ -3,6 +3,7 @@
 #include "app/ui/Fonts.hpp"
 #include "app/ui/Theme.hpp"
 #include "app/ui/text/TextLayout.hpp"
+#include "app/ui/text/Utf8.hpp"
 
 #include <algorithm>
 #include <array>
@@ -40,9 +41,15 @@ std::size_t utf8Length(unsigned char lead) {
     return 4;
 }
 
-// Regional indicators are U+1F1E6 to U+1F1FF: F0 9F 87 A6 to F0 9F 87 BF in UTF-8.
-constexpr std::string_view kRegionalIndicatorLead = "\xF0\x9F\x87";
-constexpr unsigned char kRegionalIndicatorFirst = 0xA6;
+// Every regional indicator shares its first three UTF-8 bytes; the last tells them apart.
+constexpr std::array<char, 3> kRegionalIndicatorBytesLead{
+    static_cast<char>(0xF0 | (kRegionalIndicatorA >> 18)),
+    static_cast<char>(0x80 | ((kRegionalIndicatorA >> 12) & 0x3F)),
+    static_cast<char>(0x80 | ((kRegionalIndicatorA >> 6) & 0x3F)),
+};
+constexpr std::string_view kRegionalIndicatorLead(kRegionalIndicatorBytesLead.data(),
+                                                  kRegionalIndicatorBytesLead.size());
+constexpr unsigned char kRegionalIndicatorFirst = 0x80 | (kRegionalIndicatorA & 0x3F);
 constexpr std::size_t kRegionalIndicatorBytes = 4;
 
 // The regional indicator at `at`, from 0 for A, if there is one.
@@ -79,11 +86,7 @@ std::string_view foldFlags(std::string_view text, std::string& folded) {
             at += length;
             continue;
         }
-        const char32_t flag = kFlagFirst + *first * kRegionalIndicators + *second;
-        folded += static_cast<char>(0xF0 | (flag >> 18));
-        folded += static_cast<char>(0x80 | ((flag >> 12) & 0x3F));
-        folded += static_cast<char>(0x80 | ((flag >> 6) & 0x3F));
-        folded += static_cast<char>(0x80 | (flag & 0x3F));
+        text::encodeUtf8(kFlagFirst + *first * kRegionalIndicators + *second, folded);
         at += kRegionalIndicatorBytes * 2;
     }
     return folded;
@@ -210,7 +213,10 @@ void Canvas::avatar(ImVec2 center, float sizeDp, std::string_view name) const {
     if (name.empty()) {
         return;
     }
-    const auto initial = name.substr(0, utf8Length(static_cast<unsigned char>(name[0])));
+    // A flag counts as one character.
+    std::string folded;
+    const std::string_view shown = foldFlags(name, folded);
+    const auto initial = shown.substr(0, utf8Length(static_cast<unsigned char>(shown[0])));
     const float sizeSp = sizeDp * 0.45f;
     const ImVec2 extent = measure(sizeSp, initial);
     text({center.x - extent.x * 0.5f, center.y - extent.y * 0.5f}, sizeSp, theme::kTextPrimary,
