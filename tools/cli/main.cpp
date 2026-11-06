@@ -83,7 +83,8 @@ void usage() {
         "  channel <channel id> | tab <channel id> videos|shorts|live|playlists [pages]\n"
         "  avatar <channel id> | accounts | chat <live video id> [polls]\n"
         "  posts [channel id] | post <channel id> [index]\n"
-        "  player <video id> | captions <video id> [language [translate to]]",
+        "  player <video id> | captions <video id> [language [translate to]]\n"
+        "  watched <video id> [seconds]",
         build::kAppName, build::kVersion);
 }
 
@@ -516,6 +517,18 @@ int run(std::span<const std::string_view> args) {
     }
     if (command == "player") {
         return player(api, argument);
+    }
+    if (command == "watched") {
+        // An anonymous lookup first, for the visitorData the server expects (a search would also
+        // land in the account's search history).
+        std::ignore = api.videoChannel(argument);
+        const auto sent =
+            api.reportPlayback(argument, args.size() > 2 ? std::atoi(args[2].data()) : 30);
+        if (!report(sent)) {
+            return EXIT_FAILURE;
+        }
+        std::println("reported {}", argument);
+        return EXIT_SUCCESS;
     }
     if (command == "captions") {
         return captions(http, api, argument, args.subspan(2));

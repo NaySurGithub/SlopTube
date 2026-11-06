@@ -68,6 +68,9 @@ public:
     // Next page of `page`; requires a non-empty `page.continuation`.
     [[nodiscard]] Result<Page> continuation(const Page& page);
     [[nodiscard]] Result<Player> player(std::string_view videoId);
+    // Adds the video to the signed-in account's history, watched up to `positionSeconds`.
+    [[nodiscard]] Result<void> reportPlayback(std::string_view videoId,
+                                              std::int64_t positionSeconds);
     // Subtitle tracks of a video, and the languages they can be translated into.
     [[nodiscard]] Result<Captions> captions(std::string_view videoId);
 

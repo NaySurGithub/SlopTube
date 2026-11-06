@@ -512,10 +512,6 @@ Result<Player> player(Element root) {
 
     result.storyboard =
         storyboard(json::string(root, "/storyboards/playerStoryboardSpecRenderer/spec"));
-    result.playbackTrackingUrl =
-        json::string(root, "/playbackTracking/videostatsPlaybackUrl/baseUrl");
-    result.watchtimeTrackingUrl =
-        json::string(root, "/playbackTracking/videostatsWatchtimeUrl/baseUrl");
     return result;
 }
 
