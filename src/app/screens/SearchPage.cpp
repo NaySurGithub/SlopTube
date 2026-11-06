@@ -175,17 +175,16 @@ void App::drawSearch(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
     }
 
     // The bar, as measured on the official app: back, the rounded field with its clear button,
-    // the microphone in a circle, then more.
+    // the microphone in a circle, then more (with results only).
     c.rect({min.x, 0}, {max.x, contentMin.y}, theme::g_background);
     if (iconButton(frame, Icon::Back, {min.x + c.dp(kBackX), centerY}, theme::g_textPrimary)) {
         later([this] { goBack(); });
     }
-    // Filters apply to the results, so "more" opens them only then; it is lit while any filter
-    // is on.
+    // Filters apply to the results, so "more", which opens them, is only shown with results; it
+    // is lit while any filter is on.
     const bool filtered = m_filters != innertube::SearchFilters{};
-    if (iconButton(frame, Icon::MoreVertical, {max.x - c.dp(kMoreRight), centerY},
-                   filtered ? theme::kAccent : theme::g_textPrimary) &&
-        !typing) {
+    if (!typing && iconButton(frame, Icon::MoreVertical, {max.x - c.dp(kMoreRight), centerY},
+                              filtered ? theme::kAccent : theme::g_textPrimary)) {
         m_filtersOpen = !m_filtersOpen;
         screen.feed->scroller.reset();
     }
