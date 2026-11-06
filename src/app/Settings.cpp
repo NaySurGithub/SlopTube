@@ -34,6 +34,8 @@ Settings Settings::load(const std::filesystem::path& file) {
     if (language >= 0 && language < kLanguageChoices) {
         settings.language = static_cast<int>(language);
     }
+    settings.appearance = static_cast<int>(
+        std::clamp<std::int64_t>(json::integer(*root, "/appearance"), 0, kAppearanceChoices - 1));
     return settings;
 }
 
@@ -47,6 +49,7 @@ void Settings::save(const std::filesystem::path& file) const {
         .field("checkUpdates", checkUpdates)
         .field("interfaceSize", static_cast<std::int64_t>(interfaceSize))
         .field("language", static_cast<std::int64_t>(language))
+        .field("appearance", static_cast<std::int64_t>(appearance))
         .endObject();
     writeText(file, out.take());
 }

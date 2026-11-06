@@ -50,6 +50,8 @@ public:
     // Landscape with system bars hidden (swiping an edge shows them briefly). Leaving it returns
     // to portrait, and the orientation follows the device again once it is held upright.
     void setFullscreen(bool fullscreen);
+    // Dark icons in the status and navigation bars, for a light screen under each.
+    void setLightSystemBars(bool statusBar, bool navigationBar);
     void openUrl(std::string_view url);
     // Opens the system share sheet for a plain-text message (a video link).
     void share(std::string_view subject, std::string_view text);
@@ -90,6 +92,7 @@ public:
 
     [[nodiscard]] innertube::Locale locale() const;
     [[nodiscard]] float density() const; // Pixels per density-independent pixel.
+    [[nodiscard]] bool darkMode() const; // Android's own light or dark setting.
     // The text size chosen in Android's settings: 1 normal, up to 2.
     [[nodiscard]] float fontScale();
     [[nodiscard]] std::filesystem::path dataDirectory() const;
@@ -110,6 +113,7 @@ private:
     JNIEnv* m_env = nullptr;
     bool m_keyboardVisible = false;
     bool m_fullscreen = false;
+    int m_lightSystemBars = 0; // WindowInsetsController appearance flags.
     const ASensor* m_accelerometer = nullptr;
     ASensorEventQueue* m_sensorQueue = nullptr; // Live while portrait is locked after fullscreen.
     jobject m_paint = nullptr;

@@ -198,6 +198,8 @@ public:
     void onWindowCreated(ANativeWindow* window);
     void onWindowDestroyed();
     void onInsetsChanged();
+    // Settings::appearance, or the phone's dark mode when it is left to follow it.
+    void applyAppearance();
     void onPause();
     // The app left the screen (not for picture-in-picture).
     void onStop();

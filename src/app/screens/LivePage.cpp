@@ -112,8 +112,8 @@ void App::drawLiveChat(Frame& frame, ImVec2 min, ImVec2 max) {
     const float centerY = min.y + row * 0.5f + c.dp(8);
     c.with(theme::kHeadingWeight)
         .text({min.x + gutter, centerY - c.lineHeight(theme::kSectionSize) * 0.5f},
-              theme::kSectionSize, theme::kTextPrimary, tr(Text::LiveChat));
-    if (iconButton(frame, Icon::Close, {max.x - row * 0.5f, centerY}, theme::kTextPrimary)) {
+              theme::kSectionSize, theme::g_textPrimary, tr(Text::LiveChat));
+    if (iconButton(frame, Icon::Close, {max.x - row * 0.5f, centerY}, theme::g_textPrimary)) {
         later([this] { closeSheet(); });
     }
     const ImVec2 listMin{min.x, min.y + row + c.dp(8)};
@@ -171,9 +171,9 @@ void App::drawLiveChat(Frame& frame, ImVec2 min, ImVec2 max) {
                 author += "  " + message.amount;
             }
             medium.line({textX, y}, textWidth, theme::kCaptionSize,
-                        message.amount.empty() ? theme::kTextSecondary : theme::kAccent, author);
+                        message.amount.empty() ? theme::g_textSecondary : theme::kAccent, author);
             c.paragraph({textX, y + c.lineHeight(theme::kCaptionSize)}, textWidth, theme::kBodySize,
-                        theme::kTextPrimary, message.text, kChatMessageLines);
+                        theme::g_textPrimary, message.text, kChatMessageLines);
         }
         y += heights[i];
     }

@@ -158,19 +158,19 @@ void App::drawPost(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
                     onPostAction(action, page.card.post);
                 }
                 const float top = origin.y + cardHeight;
-                canvas.list()->AddLine({origin.x, top}, {origin.x + w, top}, theme::kDivider,
+                canvas.list()->AddLine({origin.x, top}, {origin.x + w, top}, theme::g_divider,
                                        canvas.dp(1));
                 const float gutter = canvas.dp(theme::kGutter);
                 const float textY =
                     top +
                     (canvas.dp(kCommentsTitleHeight) - canvas.lineHeight(theme::kTitleSize)) * 0.5f;
                 const Canvas medium = canvas.with(Weight::Medium);
-                medium.text({origin.x + gutter, textY}, theme::kTitleSize, theme::kTextPrimary,
+                medium.text({origin.x + gutter, textY}, theme::kTitleSize, theme::g_textPrimary,
                             tr(Text::Comments));
                 canvas.text({origin.x + gutter * 1.5f +
                                  medium.measure(theme::kTitleSize, tr(Text::Comments)).x,
                              textY},
-                            theme::kTitleSize, theme::kTextSecondary, page.card.post.commentCount);
+                            theme::kTitleSize, theme::g_textSecondary, page.card.post.commentCount);
             },
     };
     drawCommentList(frame, page.comments, contentMin, max, true, header);

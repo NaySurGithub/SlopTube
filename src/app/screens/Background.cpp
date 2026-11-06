@@ -139,6 +139,7 @@ void App::updateAutoplay() {
 }
 
 void App::drawAutoplay(Frame& frame, ImVec2 min, ImVec2 max) {
+    const theme::DarkScope darkColours;
     if (m_watch.endedAt < 0 || !m_settings.autoplay || m_watch.autoplayCancelled) {
         return;
     }
@@ -154,12 +155,12 @@ void App::drawAutoplay(Frame& frame, ImVec2 min, ImVec2 max) {
     const std::string heading = std::vformat(tr(Text::UpNextIn), std::make_format_args(remaining));
     const float width = max.x - min.x - gutter * 2;
     float y = min.y + (max.y - min.y) * 0.25f;
-    c.line({min.x + gutter, y}, width, theme::kCaptionSize, theme::kTextSecondary, heading,
+    c.line({min.x + gutter, y}, width, theme::kCaptionSize, theme::g_textSecondary, heading,
            TextAlign::Center);
     y += c.lineHeight(theme::kCaptionSize) + gutter * 0.5f;
     c.with(theme::kTitleWeight)
-        .line({min.x + gutter, y}, width, theme::kTitleSize, theme::kTextPrimary, next->first.title,
-              TextAlign::Center);
+        .line({min.x + gutter, y}, width, theme::kTitleSize, theme::g_textPrimary,
+              next->first.title, TextAlign::Center);
     y += c.lineHeight(theme::kTitleSize) + gutter;
     const float button = c.dp(kAutoplayCancelWidth);
     const ImVec2 cancelMin{(min.x + max.x) * 0.5f - button - gutter * 0.5f, y};
@@ -176,12 +177,13 @@ void App::drawAutoplay(Frame& frame, ImVec2 min, ImVec2 max) {
 }
 
 void App::drawPictureInPicture(Frame& frame, ImVec2 display) {
+    const theme::DarkScope darkColours;
     const Canvas& c = frame.canvas;
     c.rect({0, 0}, display, IM_COL32_BLACK);
     m_videoSurface->draw(c.list(), {0, 0}, display);
     const auto state = m_player.state();
     if (state == media::PlayerState::Loading || m_player.buffering()) {
-        c.spinner({display.x * 0.5f, display.y * 0.5f}, theme::kSpinnerSize, theme::kTextPrimary,
+        c.spinner({display.x * 0.5f, display.y * 0.5f}, theme::kSpinnerSize, theme::g_textPrimary,
                   frame.time);
         frame.animating = true;
     }

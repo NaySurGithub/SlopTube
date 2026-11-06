@@ -41,6 +41,8 @@ void App::drawSplash(Frame& frame, ImVec2 display) {
     if (s.finished) {
         return;
     }
+    // Dark in both appearances, like the Android window it takes over from.
+    const theme::DarkScope darkColours;
     if (s.startedAt < 0) {
         s.startedAt = frame.time;
     }
@@ -72,7 +74,7 @@ void App::drawSplash(Frame& frame, ImVec2 display) {
         s.finished = true;
         return;
     }
-    c.rect({0, 0}, display, motion::withAlpha(theme::kBackground, fade));
+    c.rect({0, 0}, display, motion::withAlpha(theme::g_background, fade));
 
     // Loader layout: the play glyph, a gap and the bar, centred together.
     const ImVec2 center{display.x * 0.5f, display.y * 0.5f};

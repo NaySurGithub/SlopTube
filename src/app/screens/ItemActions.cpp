@@ -54,11 +54,11 @@ void App::drawItemActionsSheet(Frame& frame, ImVec2 min, ImVec2 max) {
         drawPressed(frame, rowMin, rowMax);
         const float centerY = y + row * 0.5f;
         c.icon(action.icon, {min.x + gutter * 2 + c.dp(theme::kIconSize) * 0.5f, centerY},
-               theme::kIconSize, theme::kTextPrimary);
+               theme::kIconSize, theme::g_textPrimary);
         c.line({min.x + gutter * 4 + c.dp(theme::kIconSize),
                 centerY - c.lineHeight(theme::kBodySize) * 0.5f},
                max.x - min.x - gutter * 6 - c.dp(theme::kIconSize), theme::kBodySize,
-               theme::kTextPrimary, tr(action.label));
+               theme::g_textPrimary, tr(action.label));
         if (frame.touch.tapped(rowMin, rowMax)) {
             later([this, label = action.label, item = m_actionItem] {
                 closeSheet();

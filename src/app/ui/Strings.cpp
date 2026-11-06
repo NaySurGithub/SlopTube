@@ -286,6 +286,13 @@ constexpr std::array<Translation, std::to_underlying(Text::Count)> kTranslations
     {Text::LanguageEnglish, {"English", "English", "English"}},
     {Text::LanguageFrench, {"Français", "Français", "Français"}},
     {Text::LanguageSpanish, {"Español", "Español", "Español"}},
+    {Text::AppearanceSetting, {"Appearance", "Apparence", "Apariencia"}},
+    {Text::AppearanceSettingDetail,
+     {"Choose a light or dark theme", "Choisissez un thème clair ou sombre",
+      "Elige un tema claro u oscuro"}},
+    {Text::AppearancePhone, {"System", "Système", "Sistema"}},
+    {Text::AppearanceLight, {"Light", "Clair", "Claro"}},
+    {Text::AppearanceDark, {"Dark", "Sombre", "Oscuro"}},
 }};
 
 // Catch a missing or misordered row at compile time rather than showing the wrong text.
