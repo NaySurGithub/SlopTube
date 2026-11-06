@@ -286,6 +286,7 @@ constexpr std::array<Translation, std::to_underlying(Text::Count)> kTranslations
     {Text::LanguageEnglish, {"English", "English", "English"}},
     {Text::LanguageFrench, {"Français", "Français", "Français"}},
     {Text::LanguageSpanish, {"Español", "Español", "Español"}},
+    {Text::AudioOnly, {"Audio only", "Audio seul", "Solo audio"}},
 }};
 
 // Catch a missing or misordered row at compile time rather than showing the wrong text.

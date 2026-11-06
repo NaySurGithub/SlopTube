@@ -47,6 +47,7 @@ without a copy.
 - **Player** - hardware decoding up to 1080p60, quality choice, playback speed, 2x while holding,
   seek previews, chapters, precise seeking, seek undo, fullscreen with pinch to zoom, mini player,
   autoplay, and the official app's haptic feedback
+- **Audio only** - plays a video's sound without downloading its picture, to save data and battery
 - **Background** - playback goes on with the screen off or in other apps, with the media
   notification, lock screen, headset and Bluetooth controls, and picture-in-picture
 - **Live** - broadcasts in progress at every quality, rewinding up to 12 hours, and the live chat

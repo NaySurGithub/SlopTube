@@ -603,6 +603,7 @@ struct Player::Session {
     std::int64_t preparedAtUs = 0;
     std::vector<std::unique_ptr<Input>> retired; // Destroyed by the loader: joining blocks.
 
+    bool audioOnly = false; // Set before the threads start.
     std::thread decoder;
     std::thread loader;
 };
@@ -669,11 +670,33 @@ Player::~Player() {
     m_reaped.wait(lock, [&] { return m_reaping == 0; });
 }
 
-void Player::open(innertube::Player info, int screenLines) {
+void Player::open(innertube::Player info, int screenLines, bool audioOnly) {
     close();
     m_screenLines = screenLines;
-    m_session = start(std::move(info), false);
+    m_session = start(std::move(info), false, audioOnly);
     m_failed = !m_session;
+}
+
+void Player::setAudioOnly(bool audioOnly) {
+    if (!canPlayAudioOnly() || m_session->audioOnly == audioOnly) {
+        return;
+    }
+    innertube::Player info = m_session->info;
+    const std::int64_t position = positionUs();
+    const bool paused = m_session->paused;
+    close();
+    m_session = start(std::move(info), false, audioOnly);
+    m_failed = !m_session;
+    seek(position);
+    setPaused(paused);
+}
+
+bool Player::canPlayAudioOnly() const {
+    return m_session && m_session->streams.audio && !m_session->info.details.live;
+}
+
+bool Player::audioOnly() const {
+    return m_session && m_session->audioOnly;
 }
 
 void Player::preload(innertube::Player info, int screenLines) {
@@ -708,7 +731,8 @@ std::size_t Player::preferredQuality(const innertube::Streams& streams,
                                    : qualities.size() - 1;
 }
 
-std::unique_ptr<Player::Session> Player::start(innertube::Player info, bool paused) {
+std::unique_ptr<Player::Session> Player::start(innertube::Player info, bool paused,
+                                               bool audioOnly) {
     auto streams = innertube::selectStreams(info, {.maxLines = kMaxDecodableLines});
     if (!streams.audio && streams.qualities.size() > 1) {
         streams.qualities.resize(1); // Switching muxed streams would restart audio too.
@@ -719,6 +743,7 @@ std::unique_ptr<Player::Session> Player::start(innertube::Player info, bool paus
     const std::size_t quality = preferredQuality(streams, info);
     auto session = std::make_unique<Session>(std::move(info), std::move(streams), quality, paused);
     Session& running = *session;
+    running.audioOnly = audioOnly && running.streams.audio && !running.info.details.live;
     running.audio.setSpeed(paused || running.info.details.live ? 1 : m_speed.load());
     running.decoder = std::thread([this, &running] {
         if (!guarded("decoder", [&] { decodeLoop(running); })) {
@@ -844,7 +869,7 @@ void Player::selectQuality(std::optional<std::size_t> quality) {
         return;
     }
     m_preferredLines = quality ? streams.qualities[*quality].lines : 0;
-    if (!streams.audio) {
+    if (!streams.audio || m_session->audioOnly) {
         return;
     }
     const std::size_t index = quality ? *quality : preferredQuality(streams, m_session->info);
@@ -1003,20 +1028,26 @@ void Player::decodeLoop(Session& session) {
         return;
     }
     const innertube::Quality& initial = session.streams.qualities[session.quality];
-    const innertube::Format& videoFormat = session.info.formats[initial.video];
-    __android_log_print(ANDROID_LOG_INFO, kLogTag, "open %s itag %d %s", initial.label.c_str(),
-                        videoFormat.itag, videoFormat.mimeType.c_str());
+    // Audio only: the audio stream takes the main input's place, as a muxed stream would, and
+    // finding no video track in it leaves the video decoder off.
+    const innertube::Format& mainFormat = session.audioOnly
+                                              ? session.info.formats[*session.streams.audio]
+                                              : session.info.formats[initial.video];
+    __android_log_print(ANDROID_LOG_INFO, kLogTag, "open %s itag %d %s",
+                        session.audioOnly ? "audio only" : initial.label.c_str(), mainFormat.itag,
+                        mainFormat.mimeType.c_str());
 
-    std::unique_ptr<Input> main = openInput(videoFormat, session);
+    std::unique_ptr<Input> main = openInput(mainFormat, session);
     std::unique_ptr<Input> audioInput;
-    if (main && session.streams.audio) {
+    const bool separateAudio = session.streams.audio && !session.audioOnly;
+    if (main && separateAudio) {
         const innertube::Format& audioFormat = session.info.formats[*session.streams.audio];
         __android_log_print(ANDROID_LOG_INFO, kLogTag, "audio itag %d %s", audioFormat.itag,
                             audioFormat.mimeType.c_str());
         // A live audio stream starts at the video's segment, so both cover the same time.
         audioInput = openInput(audioFormat, session, main->live ? main->sequence : -1);
     }
-    if (!main || (session.streams.audio && !audioInput)) {
+    if (!main || (separateAudio && !audioInput)) {
         session.state = session.stopRequested ? PlayerState::Idle : PlayerState::Failed;
         return;
     }

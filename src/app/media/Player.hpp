@@ -47,8 +47,9 @@ public:
     Player& operator=(const Player&) = delete;
 
     // Plays the best streams of `info`. Auto never picks a resolution above `screenLines`, the
-    // short side of the display in pixels.
-    void open(innertube::Player info, int screenLines);
+    // short side of the display in pixels. `audioOnly` leaves the picture out, where
+    // canPlayAudioOnly() allows it: nothing is downloaded or decoded for it.
+    void open(innertube::Player info, int screenLines, bool audioOnly = false);
     // Callers must have released every AImage acquired from imageReader() beforehand.
     void close();
 
@@ -59,6 +60,13 @@ public:
     // precondition as close()). False when no such session was preloaded.
     bool promote(std::string_view videoId);
     void closeStandby();
+
+    // Starts the open video again at the same position with or without its picture (same
+    // precondition as close()).
+    void setAudioOnly(bool audioOnly);
+    // A separate audio stream to play alone: not for live or muxed streams.
+    [[nodiscard]] bool canPlayAudioOnly() const;
+    [[nodiscard]] bool audioOnly() const;
 
     void setPaused(bool paused);
     // Playback rate, pitch preserved: 1 is normal, 2 twice as fast. Carries over to later videos;
@@ -121,7 +129,8 @@ private:
 
     [[nodiscard]] std::size_t preferredQuality(const innertube::Streams& streams,
                                                const innertube::Player& info) const;
-    [[nodiscard]] std::unique_ptr<Session> start(innertube::Player info, bool paused);
+    [[nodiscard]] std::unique_ptr<Session> start(innertube::Player info, bool paused,
+                                                 bool audioOnly = false);
     // Stops `session` and leaves its teardown (joining the decoder: codec, sources, audio; tens
     // of milliseconds) to a reaper thread, so the UI never waits on it.
     void stopSession(std::unique_ptr<Session>& session);

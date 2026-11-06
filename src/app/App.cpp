@@ -679,7 +679,8 @@ void App::startPlayback(const std::string& videoId) {
     if (auto local = m_downloads->localPlayer(videoId)) {
         m_watch.details = local->details;
         const ImVec2 display = ImGui::GetIO().DisplaySize;
-        m_player.open(std::move(*local), static_cast<int>(std::min(display.x, display.y)));
+        m_player.open(std::move(*local), static_cast<int>(std::min(display.x, display.y)),
+                      m_settings.audioOnly);
         return;
     }
     m_tasks.run([this, id = videoId] {
@@ -699,7 +700,7 @@ void App::startPlayback(const std::string& videoId) {
 
 void App::beginPlayback(innertube::Player player) {
     m_watch.details = player.details;
-    m_player.open(std::move(player), screenLines());
+    m_player.open(std::move(player), screenLines(), m_settings.audioOnly);
     if (m_player.qualities().empty()) {
         m_watch.error = tr(Text::PlaybackFailed);
     }
@@ -1528,6 +1529,7 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
         drawZoomableVideo(frame, min, max);
     } else {
         m_videoSurface->draw(list, min, max);
+        drawAudioPoster(frame, min, max);
     }
     if (const auto error = m_subtitles->takeError()) {
         showToast(tr(*error));
@@ -1869,6 +1871,19 @@ void App::drawPill(const Canvas& c, float centreX, float top, std::string_view l
     }
 }
 
+void App::setAudioOnly(bool audioOnly) {
+    m_settings.audioOnly = audioOnly;
+    applySettings();
+    m_videoSurface->release();
+    m_player.setAudioOnly(audioOnly);
+}
+
+void App::drawAudioPoster(Frame& frame, ImVec2 min, ImVec2 max) {
+    if (m_player.audioOnly()) {
+        drawThumbnail(frame, m_watch.item.thumbnail, min, max, 0);
+    }
+}
+
 void App::drawZoomableVideo(Frame& frame, ImVec2 min, ImVec2 max) {
     const Canvas& c = frame.canvas;
     const float fill = m_videoSurface->fillZoom(min, max);
@@ -1897,6 +1912,7 @@ void App::drawZoomableVideo(Frame& frame, ImVec2 min, ImVec2 max) {
         }
     }
     m_videoSurface->draw(c.list(), min, max, zoom);
+    drawAudioPoster(frame, min, max);
 
     const float centreX = (min.x + max.x) * 0.5f;
     const float top = min.y + c.dp(kZoomPillTop);
@@ -1928,7 +1944,9 @@ void App::drawPlayerMenu(Frame& frame, ImVec2 min, ImVec2 max) {
     case PlayerMenu::None:
         return;
     case PlayerMenu::Settings: {
-        // Quality, then speed (not for a live stream, which plays at the pace it is made).
+        // Quality (of a picture, if there is one), speed (not for a live stream, which plays at
+        // the pace it is made), then audio only.
+        std::vector<PlayerMenu> opens;
         const auto qualities = m_player.qualities();
         const std::optional<std::size_t> current = m_player.currentQuality();
         std::string quality(tr(Text::Quality));
@@ -1941,13 +1959,25 @@ void App::drawPlayerMenu(Frame& frame, ImVec2 min, ImVec2 max) {
                 quality += qualities[*current].label;
             }
         }
-        rows.push_back({std::move(quality), false, true});
+        if (!m_player.audioOnly()) {
+            rows.push_back({std::move(quality), false, true});
+            opens.push_back(PlayerMenu::Quality);
+        }
         if (!m_player.live()) {
             rows.push_back(
                 {std::string(tr(Text::PlaybackSpeed)) + " · " + speedLabel(m_speed), false, true});
+            opens.push_back(PlayerMenu::Speed);
+        }
+        if (m_player.canPlayAudioOnly()) {
+            rows.push_back({std::string(tr(Text::AudioOnly)), m_player.audioOnly()});
         }
         if (const auto tapped = drawMenu(frame, min, max, tr(Text::Settings), rows)) {
-            m_watch.menu = *tapped == 0 ? PlayerMenu::Quality : PlayerMenu::Speed;
+            if (*tapped < opens.size()) {
+                m_watch.menu = opens[*tapped];
+            } else {
+                m_watch.menu = PlayerMenu::None;
+                later([this, on = !m_player.audioOnly()] { setAudioOnly(on); });
+            }
             m_watch.menuScroller.reset();
         }
         break;

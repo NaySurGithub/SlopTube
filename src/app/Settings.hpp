@@ -17,6 +17,7 @@ struct Settings {
     bool autoplay = true;            // The next video plays when one ends.
     bool uploadNotifications = true; // New uploads of subscriptions are notified.
     bool checkUpdates = true;        // Release builds look for a newer release at launch.
+    bool audioOnly = false;          // Videos play without their picture, to save data.
     // Text and buttons: 0 normal, 1 large, 2 extra large (kInterfaceScales).
     int interfaceSize = 0;
     // 0 follows the phone, 1 English, 2 French, 3 Spanish.
