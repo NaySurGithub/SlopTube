@@ -66,7 +66,10 @@ void App::onBridgeEvent(BridgeEvent event) {
         m_update.error = tr(Text::UpdateNotInstalled);
         break;
     case BridgeEvent::Kind::VoiceSearch:
-        searchFor(event.query);
+    case BridgeEvent::Kind::VoicePartial:
+    case BridgeEvent::Kind::VoiceLevel:
+    case BridgeEvent::Kind::VoiceState:
+        onVoiceEvent(event);
         break;
     case BridgeEvent::Kind::PictureInPictureDismissed:
         m_player.setPaused(true); // The window's close button.

@@ -318,6 +318,24 @@ private:
         ImVec2 burstCentre{};
     };
 
+    // The listening screen of voice search, over everything else while open.
+    struct VoiceSearchState {
+        enum class Phase : std::uint8_t {
+            Starting,  // Waiting for the microphone (or its permission).
+            Listening, // The microphone is open.
+            NoMatch,   // Nothing understood: tapping the microphone listens again.
+            Denied,    // No microphone permission.
+            Failed,    // The recognition service failed.
+        };
+
+        bool open = false;
+        Phase phase = Phase::Starting;
+        std::string heard;           // The words so far.
+        float levelDb = 0;           // Last level reported by the recognizer.
+        float level = 0;             // Shown level, 0 to 1, eased towards levelDb.
+        bool resumePlayback = false; // A video was paused for the microphone.
+    };
+
     struct Toast {
         std::string text;
         double shownAt = -1;
@@ -371,6 +389,11 @@ private:
     void submitSearch(Screen& screen, std::string query);
     // submitSearch on the search screen, if it is still the one shown.
     void searchFor(const std::string& query);
+    // Voice search (VoiceSearchPage.cpp).
+    void openVoiceSearch();
+    void closeVoiceSearch();
+    void onVoiceEvent(const BridgeEvent& event);
+    void drawVoiceSearch(Frame& frame, ImVec2 display);
     void requestSuggestions(const std::string& query);
     void drawSearchSuggestions(Frame& frame, ImVec2 min, ImVec2 max);
     [[nodiscard]] float drawSearchFilters(Frame& frame, Screen& screen, ImVec2 origin, float width);
@@ -632,6 +655,7 @@ private:
     SaveState m_save;
     DownloadSheetState m_downloadSheet;
     Toast m_toast;
+    VoiceSearchState m_voice;
     ShortsState m_shorts;
     std::shared_ptr<PostFeed> m_posts = std::make_shared<PostFeed>();
     MiniPlayerState m_mini;
