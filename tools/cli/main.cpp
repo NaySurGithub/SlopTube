@@ -84,7 +84,7 @@ void usage() {
         "  avatar <channel id> | accounts | chat <live video id> [polls]\n"
         "  posts [channel id] | post <channel id> [index]\n"
         "  player <video id> | captions <video id> [language [translate to]]\n"
-        "  watched <video id> [seconds]",
+        "  watched <video id> [seconds] | like-animation <short id>",
         build::kAppName, build::kVersion);
 }
 
@@ -510,6 +510,14 @@ int run(std::span<const std::string_view> args) {
             return EXIT_FAILURE;
         }
         std::println("{}", *avatar);
+        return EXIT_SUCCESS;
+    }
+    if (command == "like-animation") {
+        auto url = api.likeAnimation(argument);
+        if (!report(url)) {
+            return EXIT_FAILURE;
+        }
+        std::println("{}", url->empty() ? "(none)" : *url);
         return EXIT_SUCCESS;
     }
     if (command == "post") {

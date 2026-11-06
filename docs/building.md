@@ -50,6 +50,9 @@ All third-party code is fetched with `FetchContent` and pinned in one place,
 - **Dear ImGui**: immediate-mode drawing and the text input widget.
 - **FreeType** (Android): glyph rasterisation through `imgui_freetype`, including the named
   instances of variable fonts. Built without zlib, bzip2, PNG, HarfBuzz and Brotli.
+- **ThorVG** (Android): plays the Lottie files of the Shorts like button. Its build is Meson,
+  so `cmake/Dependencies.cmake` compiles just its Lottie loader and software rasteriser
+  (about 370 KB of code), without threads, expressions, fonts or image loaders.
 
 Sources are collected with `file(GLOB_RECURSE ... CONFIGURE_DEPENDS)`, so new files are picked
 up by re-running the build; no CMake list needs editing.

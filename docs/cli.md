@@ -21,6 +21,7 @@ build/host-debug/tools/cli/sloptube-cli <command> [args]
 | `tab <channel id> videos\|shorts\|live\|playlists [pages]` | One channel tab (MWEB), following continuations; nothing when the channel has no such tab |
 | `chat <live video id> [polls]` | Live chat messages, polled as often as the server asks |
 | `avatar <channel or video id>` | Avatar URL (anonymous MWEB lookups; a video id is resolved to its uploader first) |
+| `like-animation <short id>` | URL of the topic Lottie the short's like button plays (`reel/reel_item_watch`, ANDROID), or "(none)" |
 | `accounts` | Profiles visible to the signed-in account |
 | `posts [channel id]` | Posts of subscribed channels as the home feed shows them, or one channel's posts tab |
 | `post <channel id> [index]` | One post of that channel opened like its page: post, comments, replies of the first thread with some |

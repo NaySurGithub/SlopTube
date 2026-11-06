@@ -30,6 +30,7 @@ enum class Endpoint : std::uint8_t {
     ChannelTab, // `browse` through MWEB: a channel's videos, shorts, live or playlists tab.
     LiveChat,
     ResolveUrl,
+    ReelItem, // `reel/reel_item_watch`: a short's overlay, read for its like button's animation.
 };
 
 enum class ItemKind : std::uint8_t {

@@ -48,6 +48,10 @@ public:
     // The videos a mix plays, in order, from the first (see isMix).
     [[nodiscard]] Result<Page> mix(std::string_view playlistId);
     [[nodiscard]] Result<Watch> watch(std::string_view videoId);
+    // URL of the Lottie file a short's like button plays when it is liked, chosen by the server
+    // from the short's topic (a cat, a ball...); empty when the short has none. The response is
+    // large (about 440 KB on the wire, mostly the overlay's templates): ask only when it is used.
+    [[nodiscard]] Result<std::string> likeAnimation(std::string_view videoId);
     // First page from a Watch comments token, or the next page / replies from a Comment token.
     [[nodiscard]] Result<CommentPage> comments(std::string_view token);
     [[nodiscard]] Result<Channel> channel(std::string_view channelId);

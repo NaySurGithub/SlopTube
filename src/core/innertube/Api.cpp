@@ -17,7 +17,7 @@ namespace {
 constexpr std::string_view kBaseUrl = "https://youtubei.googleapis.com/youtubei/v1/";
 constexpr std::string_view kQuery = "?prettyPrint=false";
 
-constexpr std::array<std::string_view, 20> kEndpointPaths{
+constexpr std::array<std::string_view, 21> kEndpointPaths{
     "browse",
     "next",
     "player",
@@ -38,8 +38,9 @@ constexpr std::array<std::string_view, 20> kEndpointPaths{
     "browse",
     "live_chat/get_live_chat",
     "navigation/resolve_url",
+    "reel/reel_item_watch",
 };
-static_assert(kEndpointPaths.size() == std::to_underlying(Endpoint::ResolveUrl) + 1);
+static_assert(kEndpointPaths.size() == std::to_underlying(Endpoint::ReelItem) + 1);
 
 constexpr std::string_view kAddVideoAction = "ACTION_ADD_VIDEO";
 constexpr std::string_view kRemoveVideoAction = "ACTION_REMOVE_VIDEO_BY_VIDEO_ID";
@@ -223,6 +224,11 @@ constexpr ClientKind kMetadataClient = ClientKind::Tv;
 // Of the clients with fully downloadable streams, only Android lists subtitle tracks, and their
 // timedtext addresses work without a proof-of-origin token.
 constexpr ClientKind kCaptionsClient = ClientKind::Android;
+// Only the Android client's Shorts overlay names the like button's animation.
+constexpr ClientKind kReelItemClient = ClientKind::Android;
+// The options the official app sends with `reel_item_watch` (the overlay is the same without).
+constexpr std::string_view kReelItemParams = "CAUwAg==";
+
 // VISIONOS, MWEB and TV send no storyboards; Android and iOS do.
 constexpr ClientKind kStoryboardClient = ClientKind::Android;
 
@@ -253,6 +259,7 @@ constexpr bool isRead(Endpoint endpoint) {
     case Endpoint::ChannelTab:
     case Endpoint::LiveChat:
     case Endpoint::ResolveUrl:
+    case Endpoint::ReelItem:
         return true;
     default:
         return false;
@@ -382,6 +389,17 @@ Result<Watch> Api::watch(std::string_view videoId) {
         return std::unexpected(root.error());
     }
     return parser::watch(*root);
+}
+
+Result<std::string> Api::likeAnimation(std::string_view videoId) {
+    auto body = openBody();
+    body.beginObject("playerRequest").field("videoId", videoId).endObject();
+    body.field("params", kReelItemParams).field("disablePlayerResponse", true);
+    auto root = checked(Endpoint::ReelItem, kReelItemClient, std::move(body));
+    if (!root) {
+        return std::unexpected(root.error());
+    }
+    return std::string(parser::likeAnimation(*root));
 }
 
 Result<CommentPage> Api::comments(std::string_view token) {
