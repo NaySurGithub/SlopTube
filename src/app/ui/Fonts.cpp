@@ -89,11 +89,12 @@ bool isEmojiModifier(char32_t c) {
            (c >= 0xE0020 && c <= 0xE007F);
 }
 
-// Blocks holding emoji: miscellaneous technical, symbols and dingbats, arrows and stars, and the
-// supplementary planes' pictographs.
+// Blocks holding emoji: miscellaneous technical, symbols and dingbats, arrows and stars, the
+// supplementary planes' pictographs, and flags.
 bool isEmojiBlock(char32_t c) {
     return (c >= 0x2300 && c <= 0x23FF) || (c >= 0x2600 && c <= 0x27BF) ||
-           (c >= 0x2B00 && c <= 0x2BFF) || (c >= 0x1F000 && c <= 0x1FAFF);
+           (c >= 0x2B00 && c <= 0x2BFF) || (c >= 0x1F000 && c <= 0x1FAFF) ||
+           (c >= kFlagFirst && c <= kFlagLast);
 }
 
 // Each question to the platform is a JNI round trip of about a millisecond: the answers are
@@ -105,7 +106,8 @@ constexpr std::size_t kEmojiDrawnKept = 32;
 bool hasEmoji(char32_t c) {
     auto [entry, inserted] = g_emojiPresent.try_emplace(c, false);
     if (inserted) {
-        entry->second = g_emoji->has(c);
+        // A pair that is no flag draws as its two letters, so there is always something to show.
+        entry->second = (c >= kFlagFirst && c <= kFlagLast) || g_emoji->has(c);
     }
     return entry->second;
 }

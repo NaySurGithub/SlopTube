@@ -1,5 +1,6 @@
 #include "app/ui/Canvas.hpp"
 
+#include "app/ui/Fonts.hpp"
 #include "app/ui/Theme.hpp"
 #include "app/ui/text/TextLayout.hpp"
 
@@ -8,6 +9,8 @@
 #include <climits>
 #include <cmath>
 #include <numbers>
+#include <optional>
+#include <string>
 
 namespace sloptube::app {
 namespace {
@@ -37,6 +40,55 @@ std::size_t utf8Length(unsigned char lead) {
     return 4;
 }
 
+// Regional indicators are U+1F1E6 to U+1F1FF: F0 9F 87 A6 to F0 9F 87 BF in UTF-8.
+constexpr std::string_view kRegionalIndicatorLead = "\xF0\x9F\x87";
+constexpr unsigned char kRegionalIndicatorFirst = 0xA6;
+constexpr std::size_t kRegionalIndicatorBytes = 4;
+
+// The regional indicator at `at`, from 0 for A, if there is one.
+std::optional<char32_t> regionalIndicator(std::string_view text, std::size_t at) {
+    if (text.size() - at < kRegionalIndicatorBytes ||
+        !text.substr(at).starts_with(kRegionalIndicatorLead)) {
+        return std::nullopt;
+    }
+    const auto last = static_cast<unsigned char>(text[at + kRegionalIndicatorBytes - 1]);
+    if (last < kRegionalIndicatorFirst || last >= kRegionalIndicatorFirst + kRegionalIndicators) {
+        return std::nullopt;
+    }
+    return last - kRegionalIndicatorFirst;
+}
+
+// `text` with each pair of regional indicators as its flag's code point (see kFlagFirst), kept in
+// `folded`. Done before lines are measured and cut, so that a flag is never split in two. Text
+// without any, nearly all of it, is returned as it is.
+std::string_view foldFlags(std::string_view text, std::string& folded) {
+    std::size_t at = text.find(kRegionalIndicatorLead);
+    if (at == std::string_view::npos) {
+        return text;
+    }
+    folded.reserve(text.size());
+    folded = text.substr(0, at);
+    while (at < text.size()) {
+        const auto first = regionalIndicator(text, at);
+        const auto second =
+            first ? regionalIndicator(text, at + kRegionalIndicatorBytes) : std::nullopt;
+        if (!second) {
+            // Whole code points, so that a lead never pairs up with the middle of another.
+            const std::size_t length = utf8Length(static_cast<unsigned char>(text[at]));
+            folded += text.substr(at, length);
+            at += length;
+            continue;
+        }
+        const char32_t flag = kFlagFirst + *first * kRegionalIndicators + *second;
+        folded += static_cast<char>(0xF0 | (flag >> 18));
+        folded += static_cast<char>(0x80 | ((flag >> 12) & 0x3F));
+        folded += static_cast<char>(0x80 | ((flag >> 6) & 0x3F));
+        folded += static_cast<char>(0x80 | (flag & 0x3F));
+        at += kRegionalIndicatorBytes * 2;
+    }
+    return folded;
+}
+
 } // namespace
 
 Canvas Canvas::with(Weight weight) const {
@@ -56,11 +108,13 @@ float Canvas::lineHeight(float sizeSp) const {
     return dp(sizeSp) * m_fonts.lineSpacing;
 }
 
-ImVec2 Canvas::measure(float sizeSp, std::string_view text) const {
+ImVec2 Canvas::measure(float sizeSp, std::string_view source) const {
     const float size = dp(sizeSp);
-    if (text.empty()) {
+    if (source.empty()) {
         return {}; // Also guards ImGui from strlen() on a null data pointer.
     }
+    std::string folded;
+    const std::string_view text = foldFlags(source, folded);
     ImVec2 extent;
     if (const text::Paragraph* laid = text::layoutBidi(m_font, size, text, FLT_MAX, INT_MAX)) {
         for (const text::VisualLine& visual : laid->lines) {
@@ -75,8 +129,10 @@ ImVec2 Canvas::measure(float sizeSp, std::string_view text) const {
     return extent;
 }
 
-void Canvas::text(ImVec2 position, float sizeSp, ImU32 color, std::string_view text) const {
+void Canvas::text(ImVec2 position, float sizeSp, ImU32 color, std::string_view source) const {
     const float size = dp(sizeSp);
+    std::string folded;
+    const std::string_view text = foldFlags(source, folded);
     if (const text::Paragraph* laid = text::layoutBidi(m_font, size, text, FLT_MAX, INT_MAX)) {
         for (const text::VisualLine& visual : laid->lines) {
             draw(position, size, color, visual.text);
@@ -93,8 +149,10 @@ void Canvas::line(ImVec2 position, float width, float sizeSp, ImU32 color, std::
 }
 
 float Canvas::paragraph(ImVec2 position, float width, float sizeSp, ImU32 color,
-                        std::string_view text, int maxLines, TextAlign align) const {
+                        std::string_view source, int maxLines, TextAlign align) const {
     const float size = dp(sizeSp);
+    std::string folded;
+    const std::string_view text = foldFlags(source, folded);
     const float advance = lineHeight(sizeSp);
     int lines = 0;
     const auto origin = [&](float lineWidth, bool rtl) {
@@ -126,8 +184,10 @@ float Canvas::paragraph(ImVec2 position, float width, float sizeSp, ImU32 color,
     return static_cast<float>(lines) * advance;
 }
 
-int Canvas::lineCount(float width, float sizeSp, std::string_view text, int maxLines) const {
+int Canvas::lineCount(float width, float sizeSp, std::string_view source, int maxLines) const {
     const float size = dp(sizeSp);
+    std::string folded;
+    const std::string_view text = foldFlags(source, folded);
     if (const text::Paragraph* laid = text::layoutBidi(m_font, size, text, width, maxLines)) {
         return static_cast<int>(laid->lines.size());
     }
