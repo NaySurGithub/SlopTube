@@ -92,6 +92,115 @@ std::string_view foldFlags(std::string_view text, std::string& folded) {
     return folded;
 }
 
+// The Shorts action glyphs on their 32-unit grid (see Icon::ReelLike). SlopTube's own outlines,
+// sized and placed after the official app's youtube_shorts_*_32dp drawables (xxhdpi): a 2-unit
+// stroke; the thumb's hand from (-6, -12.5) to (11, 12) with its wrist 6 units wide, the bubble
+// 24 x 20 with its tail down to the right edge, the arrow 26 x 25, the bookmark 22 x 26.
+void reelIcon(ImDrawList* list, Icon icon, ImVec2 c, float sizePx, ImU32 color) {
+    constexpr float kGrid = 32;
+    constexpr float kStroke = 2;
+    constexpr float kHalfPi = std::numbers::pi_v<float> * 0.5f;
+    const float unit = sizePx / kGrid;
+    const float stroke = kStroke * unit;
+    // Point reflection draws the dislike glyphs from the like ones.
+    const bool down = icon == Icon::ReelDislike || icon == Icon::ReelDislikeFilled;
+    const float flip = down ? -1.0f : 1.0f;
+    const auto p = [&](float x, float y) {
+        return ImVec2{c.x + x * flip * unit, c.y + y * flip * unit};
+    };
+    const auto curve = [&](ImVec2 c1, ImVec2 c2, ImVec2 to) {
+        list->PathBezierCubicCurveTo(p(c1.x, c1.y), p(c2.x, c2.y), p(to.x, to.y));
+    };
+    // Rounded corner of radius `r` around (x, y), from angle `from` turning a quarter clockwise.
+    const auto corner = [&](float x, float y, float r, float from) {
+        const float start = down ? from + 2 * kHalfPi : from;
+        list->PathArcTo(p(x, y), r * unit, start, start + kHalfPi);
+    };
+
+    switch (icon) {
+    case Icon::ReelLike:
+    case Icon::ReelLikeFilled:
+    case Icon::ReelDislike:
+    case Icon::ReelDislikeFilled: {
+        const bool filled = icon == Icon::ReelLikeFilled || icon == Icon::ReelDislikeFilled;
+        // Palm and thumb: knuckles bulge on the right, the thumb leans left to its rounded tip.
+        list->PathLineTo(p(-6, 12));
+        list->PathLineTo(p(8, 12));
+        curve({9, 12}, {9.4f, 11}, {9.4f, 9.4f});
+        list->PathLineTo(p(9.4f, 8.6f));
+        curve({11.6f, 7.6f}, {11.6f, 5.2f}, {10.6f, 4.4f});
+        curve({11.9f, 3.4f}, {11.9f, 1.6f}, {10.9f, 0.8f});
+        curve({10.9f, -3.1f}, {10.2f, -4.2f}, {8.6f, -4.2f});
+        list->PathLineTo(p(3.2f, -4.2f));
+        curve({2.4f, -4.2f}, {2.2f, -5.3f}, {2.4f, -6.6f});
+        list->PathLineTo(p(2.8f, -9.8f));
+        curve({2.5f, -12.6f}, {0, -13.6f}, {-1.2f, -11.6f});
+        list->PathLineTo(p(-6, -4.4f));
+        if (filled) {
+            // Filled, the outline still widens it by half a stroke, as in the official glyph.
+            const ImVector<ImVec2> outline = list->_Path;
+            list->PathFillConcave(color);
+            list->_Path = outline;
+        }
+        list->PathStroke(color, stroke, ImDrawFlags_Closed);
+        // The wrist: shares the palm's edge when outlined, stands apart when filled.
+        if (filled) {
+            const ImVec2 a = p(-13, -2.5f);
+            const ImVec2 b = p(-9.5f, 13);
+            list->AddRectFilled({std::min(a.x, b.x), std::min(a.y, b.y)},
+                                {std::max(a.x, b.x), std::max(a.y, b.y)}, color, unit);
+        } else {
+            corner(-11, -1, 1, 2 * kHalfPi);
+            list->PathLineTo(p(-6, -2));
+            list->PathLineTo(p(-6, 12));
+            corner(-11, 11, 1, kHalfPi);
+            list->PathStroke(color, stroke, ImDrawFlags_Closed);
+        }
+        break;
+    }
+    case Icon::ReelComment:
+        // A rounded bubble whose bottom-right corner runs down into the tail, and two lines.
+        corner(-9.5f, -9.5f, 2.5f, 2 * kHalfPi);
+        corner(9.5f, -9.5f, 2.5f, 3 * kHalfPi);
+        list->PathLineTo(p(12, 10.5f));
+        curve({12, 11.6f}, {11.2f, 12}, {10.4f, 11.4f});
+        list->PathLineTo(p(5, 8));
+        corner(-9.5f, 5.5f, 2.5f, kHalfPi);
+        list->PathStroke(color, stroke, ImDrawFlags_Closed);
+        list->AddRectFilled(p(-7, -6), p(7, -4), color, unit);
+        list->AddRectFilled(p(-7, 0), p(3, 2), color, unit);
+        break;
+    case Icon::ReelShare:
+        // An arrow head pointing right on a stem that sweeps down to the left.
+        list->PathLineTo(p(13, 0));
+        list->PathLineTo(p(-1.5f, -12.5f));
+        list->PathLineTo(p(-1.5f, -5));
+        curve({-9, -5}, {-13, 1}, {-13, 10.5f});
+        curve({-13, 11.8f}, {-12, 12}, {-11.2f, 10.8f});
+        curve({-8.6f, 6.6f}, {-5.8f, 4.5f}, {-1.5f, 4.5f});
+        list->PathLineTo(p(-1.5f, 12.5f));
+        list->PathStroke(color, stroke, ImDrawFlags_Closed);
+        break;
+    case Icon::ReelSave:
+    case Icon::ReelSaveFilled:
+        // A bookmark: rounded top corners, a notch rising to the middle at the bottom.
+        list->PathLineTo(p(-11, 13));
+        corner(-9.5f, -11.5f, 1.5f, 2 * kHalfPi);
+        corner(9.5f, -11.5f, 1.5f, 3 * kHalfPi);
+        list->PathLineTo(p(11, 13));
+        list->PathLineTo(p(0, 6));
+        if (icon == Icon::ReelSaveFilled) {
+            const ImVector<ImVec2> outline = list->_Path;
+            list->PathFillConcave(color);
+            list->_Path = outline;
+        }
+        list->PathStroke(color, stroke, ImDrawFlags_Closed);
+        break;
+    default:
+        break;
+    }
+}
+
 } // namespace
 
 Canvas Canvas::with(Weight weight) const {
@@ -501,6 +610,16 @@ void Canvas::icon(Icon icon, ImVec2 c, float sizeDp, ImU32 color) const {
         m_list->AddRectFilled(p(-9, -9), p(9, 9), color, unit * 2);
         m_list->AddLine(p(-5, 0), p(-1.5f, 4), theme::g_textOnLight, stroke);
         m_list->AddLine(p(-1.5f, 4), p(5.5f, -4), theme::g_textOnLight, stroke);
+        break;
+    case Icon::ReelLike:
+    case Icon::ReelLikeFilled:
+    case Icon::ReelDislike:
+    case Icon::ReelDislikeFilled:
+    case Icon::ReelComment:
+    case Icon::ReelShare:
+    case Icon::ReelSave:
+    case Icon::ReelSaveFilled:
+        reelIcon(m_list, icon, c, dp(sizeDp), color);
         break;
     }
 }

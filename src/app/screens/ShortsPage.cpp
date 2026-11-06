@@ -6,8 +6,12 @@
 #include "app/ui/Theme.hpp"
 #include "app/ui/Touch.hpp"
 
+#include <imgui_internal.h>
+
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <memory>
 #include <numbers>
 #include <span>
 
@@ -23,30 +27,162 @@ constexpr float kPageThreshold = 0.18f;   // Fraction of a page a drag must trav
 constexpr float kFlingSpeed = 600;        // dp/s that turns a page whatever the distance.
 constexpr float kSnapRate = 12;           // Exponential rate of the snap animation.
 constexpr std::size_t kPrefetchAhead = 3; // Load more when this close to the end.
-// Right-hand action column, measured on the official app: 60 dp between buttons, a 28 dp icon
-// with its label centred 22 dp below, the column's axis 32 dp from the right edge.
+// Right-hand action column, measured on the official app: 60 dp between buttons, the label
+// centred 22 dp below the icon's centre, the column's axis 32 dp from the right edge. From its
+// APK: each cell is 64 dp wide (reel_player_right_cell_width) and its icon a 32 dp drawable
+// (youtube_shorts_like_outline_32dp and its siblings), labelled in 12 sp medium (body S heavy).
 constexpr float kActionSpacing = 60; // dp
-constexpr float kActionIcon = 28;    // dp
+constexpr float kActionIcon = 32;    // dp
 constexpr float kActionLabel = 22;   // dp from the icon's centre to the label's centre.
 constexpr float kActionAxis = 32;    // dp from the right edge.
 constexpr float kActionWidth = 64;   // dp, width of a button's touch target.
-constexpr float kShadowOffset = 1;   // dp, drop shadow keeping white glyphs legible on video.
-constexpr ImU32 kShadow = IM_COL32(0, 0, 0, 0x70);
+// Pressed, a cell shows a 64 dp circle of white at 10 % (reel_player_dyn_cell_background_pressed)
+// and its icon shrinks to 90 % (shorts_button_reduce_size_animation).
+constexpr ImU32 kActionPressed = IM_COL32(0xff, 0xff, 0xff, 0x1a);
+constexpr float kActionPressScale = 0.9f;
+// Glyphs and text over the video are pure white (yt_white1) with a shadow of black at 40 %
+// (reel_player_right_cell_shadow_color) 1 dp below (shadowDx 0, shadowDy 1).
+constexpr ImU32 kOverlayText = IM_COL32_WHITE;
+constexpr ImU32 kShadow = IM_COL32(0, 0, 0, 0x66);
+constexpr float kShadowOffset = 1; // dp
+// Channel row and title, from the APK's reel_player_right_footer: 16 dp from the left edge
+// (reel_player_right_container_margin), the title stopping 80 dp from the right
+// (reel_title_margin_end) in 16 sp regular (reel_primary_font_size, body L), the channel name in
+// 14 sp medium (reel_secondary_font_size) 8 dp after the avatar and 8 dp before Subscribe
+// (reel_player_right_byline_margin_inner).
+constexpr float kTextStart = 16;     // dp
+constexpr float kTextEnd = 80;       // dp
+constexpr float kTitleSize = 16;     // sp
+constexpr float kBylineGap = 8;      // dp
 constexpr float kChannelAvatar = 32; // dp
-constexpr float kScrimHeight = 0.4f; // Fraction of the page covered by the bottom scrim.
-constexpr float kSheetTop = 0.3f;    // Fraction of the page above the comments and description.
-constexpr float kProgressHeight = 2; // dp
-constexpr int kPosterWidth = 720;    // px
+// Scrims (reel_player_overlay_scrims, vertical): black at 30 % (reel_black_pure_alpha_30) over
+// the bottom 64 dp, fading out over the 120 dp above, and from the top over 64 dp.
+constexpr ImU32 kReelScrim = IM_COL32(0, 0, 0, 0x4c);
+constexpr float kScrimBottomSolid = 64; // dp
+constexpr float kScrimBottomFade = 120; // dp
+constexpr float kScrimTopFade = 64;     // dp
+constexpr float kSheetTop = 0.3f;       // Fraction of the page above the comments and description.
+constexpr float kProgressHeight = 2;    // dp, reel_progress_bar_height.
+constexpr int kPosterWidth = 720;       // px
 constexpr int kShortTitleLines = 2;
-// Double-tap like: a white thumb pops up amid rays of the accent colour, then fades. SlopTube's
-// own animation; only the idea of a liking burst is the official app's.
-constexpr float kBurstDuration = 0.8f; // s
-constexpr float kBurstFade = 0.25f;    // s at the end.
-constexpr float kBurstThumb = 64;      // dp
-constexpr float kBurstInner = 40;      // dp from the centre where rays start.
-constexpr float kBurstOuter = 72;      // dp where they end.
-constexpr float kBurstStroke = 3;      // dp
-constexpr std::size_t kBurstRays = 8;
+
+// Keyframed animations measured from the official app's Lottie files: values at frame numbers,
+// eased in and out between them.
+struct Key {
+    float frame;
+    float value;
+};
+
+[[nodiscard]] float keyed(std::span<const Key> keys, float frame) {
+    if (frame <= keys.front().frame) {
+        return keys.front().value;
+    }
+    for (std::size_t i = 1; i < keys.size(); ++i) {
+        const Key& a = keys[i - 1];
+        const Key& b = keys[i];
+        if (frame <= b.frame) {
+            const float t = (frame - a.frame) / (b.frame - a.frame);
+            return a.value + (b.value - a.value) * motion::easeInOutCubic(t);
+        }
+    }
+    return keys.back().value;
+}
+
+// Turns what was drawn since vertex `first` by `degrees` about `pivot`.
+void rotateSince(ImDrawList* list, int first, ImVec2 pivot, float degrees) {
+    const float radians = degrees * std::numbers::pi_v<float> / 180;
+    const float cos = std::cos(radians);
+    const float sin = std::sin(radians);
+    for (int i = first; i < list->VtxBuffer.Size; ++i) {
+        ImVec2& pos = list->VtxBuffer[i].pos;
+        const ImVec2 d{pos.x - pivot.x, pos.y - pivot.y};
+        pos = {pivot.x + d.x * cos - d.y * sin, pivot.y + d.x * sin + d.y * cos};
+    }
+}
+
+// The red and pink of the official like animations (#ff0033 is the accent; #ff2691).
+constexpr ImU32 kLikePink = IM_COL32(0xff, 0x26, 0x91, 0xff);
+
+// Double-tap like, after like_tap_feedback_shorts_heart (60 fps, a 290-unit composition shown
+// 240 dp wide, reel_player_tap_feedback_like_width): a heart filled red to pink fades in above
+// the tap, grows to 125 % while rising, wobbles, then sinks back and fades out. The heart is
+// SlopTube's own shape at the official one's size, 67 x 60 units at 100 %.
+constexpr float kHeartFps = 60;
+constexpr float kHeartEnd = 73;               // Frames.
+constexpr float kHeartUnit = 240.0f / 290.0f; // dp per unit.
+constexpr ImVec2 kHeartSize{67.25f, 60.1f};   // Units.
+constexpr std::array kHeartOpacity{Key{2, 0}, Key{4, 0.9f}, Key{14, 1}, Key{64, 1}, Key{72, 0}};
+constexpr std::array kHeartScale{Key{2, 0.958f}, Key{4, 1},      Key{14, 1.25f}, Key{27, 1.22f},
+                                 Key{36, 1.25f}, Key{64, 1.25f}, Key{72, 0.958f}};
+// Height of the heart's centre above the tap, units.
+constexpr std::array kHeartRise{Key{2, 11.3f},  Key{4, 10.4f},  Key{14, 27.2f}, Key{27, 24},
+                                Key{36, 27.2f}, Key{64, 22.2f}, Key{72, 11.4f}};
+// The gradient runs from the bottom left to the top right: red up to 60 % of the way, pink from
+// 85 %. Ends in units from the heart's centre at 100 %.
+constexpr ImVec2 kHeartRed{-1.0f, -13.2f};
+constexpr ImVec2 kHeartPinkEnd{19.5f, -31.2f};
+
+// The like button turning on, after reel_animated_like_icon_v3 (60 fps over 60 frames, a 48-unit
+// composition). Its final thumb is 19 units wide where the static filled icon is 25.3 dp, so the
+// composition is drawn 64 dp wide, which also fits topic animations to the column.
+constexpr float kLikeFps = 60;
+constexpr float kLikeEnd = 60;                     // Frames.
+constexpr float kLikeComposition = 64;             // dp
+constexpr float kLikeUnit = kLikeComposition / 48; // dp per unit.
+constexpr int kLikeAnimationFrames = 30;           // Topic animations are kept at 30 fps.
+// Frames 0-4: the outline shrinks to 30 % and turns 6°; then the filled thumb pops from 50 % to
+// 120 %, wobbling from 15° to -10° and 5°, and rises 2 units on the way.
+constexpr float kLikeSwap = 4;
+constexpr std::array kLikeOutlineScale{Key{0, 1}, Key{4, 0.3f}};
+constexpr std::array kLikeOutlineTurn{Key{0, 0}, Key{4, 6}};
+constexpr std::array kLikeScale{Key{4, 0.5f}, Key{17, 1.2f}, Key{37, 1}};
+constexpr std::array kLikeTurn{Key{4, 15}, Key{17, -10}, Key{37, 5}, Key{60, 0}};
+constexpr std::array kLikeRise{Key{4, 0}, Key{17, 2}, Key{37, 0}};
+// Ten rays, five red and five pink between them, shoot out from frame 8 to 36 while their centre
+// drops 4 units: radii in units, widths thinning from frame 12.
+constexpr float kRaysStart = 8;
+constexpr float kRaysEnd = 36;
+constexpr std::size_t kRays = 5;
+constexpr std::array kRaysDrop{Key{12, 0}, Key{36, 4}};
+
+struct Ray {
+    ImU32 color;
+    float angle; // Degrees from straight up, for the first one.
+    std::array<Key, 4> inner;
+    std::array<Key, 4> outer;
+    std::array<Key, 2> width;
+    std::array<Key, 2> turn;
+};
+
+constexpr std::array kLikeRays{
+    Ray{theme::kAccent,
+        0,
+        {Key{0, 9.1f}, Key{4, 13.3f}, Key{8, 15.3f}, Key{28, 19.9f}},
+        {Key{0, 12.9f}, Key{4, 18.1f}, Key{8, 19.9f}, Key{28, 20}},
+        {Key{12, 3}, Key{28, 0}},
+        {Key{0, 0}, Key{28, -6}}},
+    Ray{kLikePink,
+        36,
+        {Key{0, 8.1f}, Key{4, 12.3f}, Key{8, 14.3f}, Key{28, 18.9f}},
+        {Key{0, 11.9f}, Key{4, 17.1f}, Key{8, 18.9f}, Key{28, 19}},
+        {Key{12, 2}, Key{28, 0}},
+        {Key{0, 0}, Key{32, 6}}},
+};
+
+// Tapping to pause or play, after pause_tap_feedback and play_tap_feedback (30 fps, 96 dp): the
+// glyph in a 72 dp circle of black at 60 % pops to 130 % (the circle to 110 %), settles, and fades
+// out (frames 17-22 for play, 25-30 for pause). Where the pause glyph would fade, SlopTube shows
+// the play button at rest instead, kept while paused so the state stays visible.
+constexpr float kFeedbackFps = 30;
+constexpr float kFeedbackCircle = 72; // dp
+constexpr ImU32 kFeedbackFill = IM_COL32(0, 0, 0, 0x99);
+constexpr std::array kFeedbackGlyphScale{Key{0, 0}, Key{4, 1.3f}, Key{13, 1}};
+constexpr std::array kFeedbackCircleScale{Key{0, 0}, Key{4, 1.1f}, Key{13, 1}};
+constexpr std::array kPlayFade{Key{17, 1}, Key{22, 0}};
+constexpr float kPauseHold = 25;      // Frames.
+constexpr ImVec2 kPlayGlyph{19, 20};  // dp: a triangle pointing right.
+constexpr ImVec2 kPauseBar{4, 18};    // dp: two bars, 10 dp between their centres.
+constexpr float kPauseBarsApart = 10; // dp
 // Shorts around the current one whose responses and posters are fetched ahead; the next one is
 // also preloaded on the player's standby session.
 constexpr std::size_t kPrefetchNext = 2;
@@ -318,6 +454,11 @@ void App::drawShorts(Frame& frame, ImVec2 min, ImVec2 max) {
         later([this, item = items[state.index]] { playShort(item); });
     } else {
         prefetchShorts(items, state.index);
+        // Only a signed-in account can like, and the request is large: asked for the short being
+        // watched, once it plays so that it does not compete with its start.
+        if (m_session.signedIn() && m_player.state() == media::PlayerState::Playing) {
+            loadLikeAnimation(state.playing);
+        }
     }
     if (!feed->loading && !feed->page.continuation.empty() &&
         state.index + kPrefetchAhead >= items.size()) {
@@ -343,41 +484,181 @@ void App::drawShorts(Frame& frame, ImVec2 min, ImVec2 max) {
 }
 
 void App::drawLikeBurst(Frame& frame) {
-    const theme::DarkScope darkColours;
-    const float elapsed = static_cast<float>(frame.time - m_shorts.burstAt);
-    if (m_shorts.burstAt < 0 || elapsed > kBurstDuration) {
+    const float heartFrame = static_cast<float>(frame.time - m_shorts.burstAt) * kHeartFps;
+    if (m_shorts.burstAt < 0 || heartFrame > kHeartEnd) {
         m_shorts.burstAt = -1;
         return;
     }
     frame.animating = true;
     const Canvas& c = frame.canvas;
-    const ImVec2 centre = m_shorts.burstCentre;
-    const float t = elapsed / kBurstDuration;
-    const float alpha = std::clamp((kBurstDuration - elapsed) / kBurstFade, 0.0f, 1.0f);
+    const float alpha = keyed(kHeartOpacity, heartFrame);
+    if (alpha <= 0) {
+        return;
+    }
+    // Composition units to pixels at the current scale.
+    const float unit = c.dp(kHeartUnit) * keyed(kHeartScale, heartFrame);
+    const ImVec2 centre{m_shorts.burstCentre.x,
+                        m_shorts.burstCentre.y - c.dp(kHeartUnit) * keyed(kHeartRise, heartFrame)};
+    const float w = kHeartSize.x * unit;
+    const float h = kHeartSize.y * unit;
+    const auto p = [&](float x, float y) { return ImVec2{centre.x + x * w, centre.y + y * h}; };
 
-    // Rays: the head runs out over the first half, the tail catches up over the first 60 %.
-    const float head = motion::easeOutCubic(t * 2);
-    const float tail = motion::easeOutCubic(t / 0.6f);
-    if (head > tail) {
-        const float inner = c.dp(kBurstInner);
-        const float span = c.dp(kBurstOuter - kBurstInner);
-        for (std::size_t ray = 0; ray < kBurstRays; ++ray) {
-            const float angle = static_cast<float>(ray) * 2 * std::numbers::pi_v<float> /
-                                static_cast<float>(kBurstRays);
-            const ImVec2 direction{std::cos(angle), std::sin(angle)};
-            const auto at = [&](float along) {
-                const float radius = inner + span * along;
-                return ImVec2{centre.x + direction.x * radius, centre.y + direction.y * radius};
-            };
-            c.list()->AddLine(at(tail), at(head),
-                              ray % 2 == 0 ? theme::kAccent : theme::g_textPrimary,
-                              c.dp(kBurstStroke));
+    // Two lobes meeting in a notch, curving down to the point.
+    ImDrawList* list = c.list();
+    const int first = list->VtxBuffer.Size;
+    list->PathLineTo(p(0, -0.28f));
+    list->PathBezierCubicCurveTo(p(-0.12f, -0.52f), p(-0.5f, -0.56f), p(-0.5f, -0.16f));
+    list->PathBezierCubicCurveTo(p(-0.5f, 0.12f), p(-0.2f, 0.3f), p(0, 0.5f));
+    list->PathBezierCubicCurveTo(p(0.2f, 0.3f), p(0.5f, 0.12f), p(0.5f, -0.16f));
+    list->PathBezierCubicCurveTo(p(0.5f, -0.56f), p(0.12f, -0.52f), p(0, -0.28f));
+    list->PathFillConcave(motion::withAlpha(IM_COL32_WHITE, alpha));
+    ImGui::ShadeVertsLinearColorGradientKeepAlpha(
+        list, first, list->VtxBuffer.Size,
+        {centre.x + kHeartRed.x * unit, centre.y + kHeartRed.y * unit},
+        {centre.x + kHeartPinkEnd.x * unit, centre.y + kHeartPinkEnd.y * unit}, theme::kAccent,
+        kLikePink);
+}
+
+void App::drawLikeIcon(Frame& frame, bool liked, ImVec2 center, float scale) {
+    const Canvas& c = frame.canvas;
+    const auto& sheet = m_shorts.likeAnimation;
+    const double started = m_watch.likePopAt;
+    // A like set before the short was shown starts at its end.
+    const float elapsed = liked && started >= 0 ? static_cast<float>(frame.time - started) : 1e9f;
+    const ImVec2 shadowAt{center.x, center.y + c.dp(kShadowOffset)};
+    if (!liked) {
+        c.icon(Icon::ReelLike, shadowAt, kActionIcon * scale, kShadow);
+        c.icon(Icon::ReelLike, center, kActionIcon * scale, kOverlayText);
+        return;
+    }
+    if (sheet.ready()) {
+        // The short's own animation, which carries its shadow; its last frame is the liked icon.
+        const float progress = sheet.duration() > 0 ? elapsed / sheet.duration() : 1;
+        if (progress < 1) {
+            frame.animating = true;
+        }
+        sheet.draw(c.list(), center, c.dp(kLikeComposition) * scale, progress);
+        return;
+    }
+
+    const float at = elapsed * kLikeFps;
+    if (at < kLikeEnd) {
+        frame.animating = true;
+    }
+    ImDrawList* list = c.list();
+    if (at < kLikeSwap) {
+        const int first = list->VtxBuffer.Size;
+        c.icon(Icon::ReelLike, center, kActionIcon * scale * keyed(kLikeOutlineScale, at),
+               kOverlayText);
+        rotateSince(list, first, center, keyed(kLikeOutlineTurn, at));
+        return;
+    }
+
+    if (at >= kRaysStart && at < kRaysEnd) {
+        const float local = at - kRaysStart;
+        const float unit = c.dp(kLikeUnit) * scale;
+        const ImVec2 origin{center.x, center.y + keyed(kRaysDrop, at) * unit};
+        for (const Ray& ray : kLikeRays) {
+            const float width = keyed(ray.width, local) * unit;
+            const float inner = keyed(ray.inner, local) * unit;
+            const float outer = keyed(ray.outer, local) * unit;
+            if (width <= 0 || outer <= inner) {
+                continue;
+            }
+            for (std::size_t i = 0; i < kRays; ++i) {
+                const float degrees = ray.angle + keyed(ray.turn, local) +
+                                      static_cast<float>(i) * 360 / static_cast<float>(kRays);
+                const float radians = (degrees - 90) * std::numbers::pi_v<float> / 180;
+                const ImVec2 d{std::cos(radians), std::sin(radians)};
+                list->AddLine({origin.x + d.x * inner, origin.y + d.y * inner},
+                              {origin.x + d.x * outer, origin.y + d.y * outer}, ray.color, width);
+            }
         }
     }
-    const float pop =
-        motion::easeOutBack(motion::progress(frame.time, m_shorts.burstAt, motion::kPopDuration));
-    c.icon(Icon::ThumbUpFilled, centre, kBurstThumb * pop,
-           motion::withAlpha(theme::g_textPrimary, alpha));
+    const ImVec2 at2{center.x, center.y - keyed(kLikeRise, at) * c.dp(kLikeUnit) * scale};
+    const float size = kActionIcon * scale * keyed(kLikeScale, at);
+    const int first = list->VtxBuffer.Size;
+    c.icon(Icon::ReelLikeFilled, {at2.x, at2.y + c.dp(kShadowOffset)}, size, kShadow);
+    c.icon(Icon::ReelLikeFilled, at2, size, kOverlayText);
+    rotateSince(list, first, at2, keyed(kLikeTurn, at));
+}
+
+void App::loadLikeAnimation(const std::string& videoId) {
+    if (m_shorts.likeAnimationFor == videoId) {
+        return;
+    }
+    m_shorts.likeAnimationFor = videoId;
+    const int cell = static_cast<int>(std::lround(kLikeComposition * m_density));
+    m_tasks.run([this, videoId, cell] {
+        auto url = m_api.likeAnimation(videoId);
+        // On failure the thumb's own animation plays.
+        m_tasks.post([this, videoId, cell, url = url ? std::move(*url) : std::string()] {
+            auto& shorts = m_shorts;
+            if (shorts.likeAnimationFor != videoId || shorts.likeAnimationUrl == url) {
+                return; // Moved on, or the same topic as the short before: already rendered.
+            }
+            shorts.likeAnimation.reset();
+            shorts.likeAnimationUrl = url;
+            if (url.empty()) {
+                return;
+            }
+            m_tasks.run([this, url, cell] {
+                auto response = m_http.send({.url = url, .retryOnStall = true});
+                if (!response || !response->ok()) {
+                    return;
+                }
+                auto frames = renderLottie(response->body, cell, kLikeAnimationFrames);
+                if (!frames) {
+                    return;
+                }
+                m_tasks.post(
+                    [this, url, frames = std::make_shared<LottieFrames>(std::move(*frames))] {
+                        if (m_shorts.likeAnimationUrl == url) {
+                            m_shorts.likeAnimation.upload(*frames);
+                        }
+                    });
+            });
+        });
+    });
+}
+
+void App::drawPlayFeedback(Frame& frame, ImVec2 center, bool paused) {
+    const Canvas& c = frame.canvas;
+    const float at = m_shorts.toggledAt >= 0
+                         ? static_cast<float>(frame.time - m_shorts.toggledAt) * kFeedbackFps
+                         : 1e9f;
+    if (!paused && at >= kPlayFade.back().frame) {
+        return;
+    }
+    // Paused, the pause glyph pops, then the play button rests in its place.
+    const bool showPause = paused && at < kPauseHold;
+    float glyphScale = 1;
+    float circleScale = 1;
+    if (showPause || !paused) {
+        frame.animating = true;
+        glyphScale = keyed(kFeedbackGlyphScale, at);
+        circleScale = keyed(kFeedbackCircleScale, at);
+    }
+    const float alpha = paused ? 1 : keyed(kPlayFade, at);
+    ImDrawList* list = c.list();
+    list->AddCircleFilled(center, c.dp(kFeedbackCircle) * 0.5f * circleScale,
+                          motion::withAlpha(kFeedbackFill, alpha));
+    const ImU32 glyph = motion::withAlpha(kOverlayText, alpha);
+    if (showPause) {
+        const float half = c.dp(kPauseBarsApart) * 0.5f * glyphScale;
+        const ImVec2 bar{c.dp(kPauseBar.x) * 0.5f * glyphScale,
+                         c.dp(kPauseBar.y) * 0.5f * glyphScale};
+        for (const float x : {center.x - half, center.x + half}) {
+            list->AddRectFilled({x - bar.x, center.y - bar.y}, {x + bar.x, center.y + bar.y}, glyph,
+                                bar.x * 0.5f);
+        }
+        return;
+    }
+    // The triangle's centroid sits on the circle's centre, as in the official glyph.
+    const ImVec2 size{c.dp(kPlayGlyph.x) * glyphScale, c.dp(kPlayGlyph.y) * glyphScale};
+    const float left = center.x - size.x / 3;
+    list->AddTriangleFilled({left, center.y - size.y * 0.5f}, {left, center.y + size.y * 0.5f},
+                            {left + size.x, center.y}, glyph);
 }
 
 void App::drawShort(Frame& frame, const innertube::Item& item, bool current, ImVec2 min,
@@ -386,7 +667,6 @@ void App::drawShort(Frame& frame, const innertube::Item& item, bool current, ImV
     const Canvas medium = c.with(Weight::Medium);
     const float gutter = c.dp(theme::kGutter);
     const float width = max.x - min.x;
-    const float page = max.y - min.y;
     innertube::Watch* info =
         current && m_watch.info && m_watch.info->videoId == item.id ? &*m_watch.info : nullptr;
 
@@ -426,17 +706,25 @@ void App::drawShort(Frame& frame, const innertube::Item& item, bool current, ImV
                                   c.dp(theme::kScrubHandle), theme::kAccent);
         return;
     }
-    c.list()->AddRectFilledMultiColor({min.x, max.y - page * kScrimHeight}, max, kTransparent,
-                                      kTransparent, kScrimBottom, kScrimBottom);
+    const float solidTop = max.y - c.dp(kScrimBottomSolid);
+    c.list()->AddRectFilledMultiColor({min.x, solidTop - c.dp(kScrimBottomFade)}, {max.x, solidTop},
+                                      kTransparent, kTransparent, kReelScrim, kReelScrim);
+    c.rect({min.x, solidTop}, max, kReelScrim);
+    c.list()->AddRectFilledMultiColor(min, {max.x, min.y + c.dp(kScrimTopFade)}, kReelScrim,
+                                      kReelScrim, kTransparent, kTransparent);
 
-    // Right-hand actions, stacked up from the title's baseline: share, save, comments, dislike,
-    // like. Those needing the video's details show (inert) before they arrive so nothing jumps
-    // in later.
+    // Right-hand actions, stacked up from the title's baseline in the official order: like,
+    // dislike, comments, share, then save where the official app has Remix (which records a
+    // short). Those needing the video's details show (inert) before they arrive so nothing
+    // jumps in later.
     const float actionX = max.x - c.dp(kActionAxis);
     const float captionHeight = c.lineHeight(theme::kCaptionSize);
     float slotBottom = max.y - gutter * 1.5f;
     const float shadow = c.dp(kShadowOffset);
-    const auto action = [&](Icon icon, std::string_view label, bool needsInfo = true) {
+    const Rating rating = info ? info->rating : Rating::None;
+    // `like` draws the like button's own (animated) icon instead of `icon`.
+    const auto action = [&](Icon icon, std::string_view label, bool needsInfo = true,
+                            bool like = false) {
         const bool enabled = current && (info != nullptr || !needsInfo);
         const float iconY = slotBottom - captionHeight * 0.5f - c.dp(kActionLabel);
         const ImVec2 hitMin{actionX - c.dp(kActionWidth) * 0.5f,
@@ -445,68 +733,78 @@ void App::drawShort(Frame& frame, const innertube::Item& item, bool current, ImV
         slotBottom -= c.dp(kActionSpacing);
         const bool pressed = enabled && frame.touch.pressed(hitMin, hitMax);
         const ImVec2 center{actionX, iconY};
-        c.icon(icon, {center.x + shadow, center.y + shadow}, kActionIcon, kShadow);
-        c.icon(icon, center, pressed ? kActionIcon * 0.9f : kActionIcon, theme::g_textPrimary);
+        if (pressed) {
+            c.list()->AddCircleFilled(center, c.dp(kActionWidth) * 0.5f, kActionPressed);
+            frame.animating = true;
+        }
+        const float scale = pressed ? kActionPressScale : 1;
+        if (like) {
+            drawLikeIcon(frame, rating == Rating::Like, center, scale);
+        } else {
+            c.icon(icon, {center.x, center.y + shadow}, kActionIcon * scale, kShadow);
+            c.icon(icon, center, kActionIcon * scale, kOverlayText);
+        }
         const float labelWidth = medium.measure(theme::kCaptionSize, label).x;
         // Centred under the icon, but kept on screen when longer than the column ("Dislike").
         const ImVec2 labelAt{std::min(center.x - labelWidth * 0.5f, max.x - gutter - labelWidth),
                              center.y + c.dp(kActionLabel) - captionHeight * 0.5f};
-        medium.text({labelAt.x + shadow, labelAt.y + shadow}, theme::kCaptionSize, kShadow, label);
-        medium.text(labelAt, theme::kCaptionSize, theme::g_textPrimary, label);
-        if (pressed) {
-            frame.animating = true;
-        }
+        medium.text({labelAt.x, labelAt.y + shadow}, theme::kCaptionSize, kShadow, label);
+        medium.text(labelAt, theme::kCaptionSize, kOverlayText, label);
         return enabled && frame.touch.tapped(hitMin, hitMax);
     };
-    const Rating rating = info ? info->rating : Rating::None;
-    if (action(Icon::Share, tr(Text::Share), false)) {
-        shareVideo(item, true);
-    }
-    if (action(Icon::Save, tr(Text::Save), false)) {
+    if (action(Icon::ReelSave, tr(Text::Save), false)) {
         later([this, id = item.id] { openSave(id); });
     }
-    if (action(Icon::Comment, info ? std::string_view(info->commentCount) : "")) {
+    if (action(Icon::ReelShare, tr(Text::Share), false)) {
+        shareVideo(item, true);
+    }
+    if (action(Icon::ReelComment, info ? std::string_view(info->commentCount) : "")) {
         if (!info->commentsToken.empty()) {
             later([this] { openSheet(Sheet::Comments); });
         }
     }
-    if (action(rating == Rating::Dislike ? Icon::ThumbDownFilled : Icon::ThumbDown,
+    if (action(rating == Rating::Dislike ? Icon::ReelDislikeFilled : Icon::ReelDislike,
                tr(Text::Dislike))) {
         rateVideo(toggled(info->rating, Rating::Dislike));
     }
-    if (action(rating == Rating::Like ? Icon::ThumbUpFilled : Icon::ThumbUp,
-               info ? std::string_view(info->likes) : "")) {
+    if (action(Icon::ReelLike, info ? std::string_view(info->likes) : "", true, true)) {
         rateVideo(toggled(info->rating, Rating::Like));
     }
 
     // Channel and title, bottom left.
     // The title sits on the bottom margin whatever its length, as in the official app: a single
     // line stays close to the progress bar. Tapping it opens the description.
-    const float textRight = actionX - c.dp(32);
-    const float textWidth = textRight - min.x - gutter;
+    const float textX = min.x + c.dp(kTextStart);
+    const float textRight = max.x - c.dp(kTextEnd);
+    const float textWidth = textRight - textX;
     const std::string& title = info ? info->title : item.title;
     float bottom = max.y - gutter * 1.5f;
     const float titleHeight =
-        c.lineHeight(theme::kBodySize) *
-        static_cast<float>(c.lineCount(textWidth, theme::kBodySize, title, kShortTitleLines));
-    const ImVec2 titleMin{min.x + gutter, bottom - titleHeight};
-    c.paragraph(titleMin, textWidth, theme::kBodySize, theme::g_textPrimary, title,
+        c.lineHeight(kTitleSize) *
+        static_cast<float>(c.lineCount(textWidth, kTitleSize, title, kShortTitleLines));
+    const ImVec2 titleMin{textX, bottom - titleHeight};
+    c.paragraph({titleMin.x, titleMin.y + shadow}, textWidth, kTitleSize, kShadow, title,
                 kShortTitleLines);
+    c.paragraph(titleMin, textWidth, kTitleSize, kOverlayText, title, kShortTitleLines);
     if (info && current && frame.touch.tapped(titleMin, {textRight, bottom})) {
         later([this] { openSheet(Sheet::Description); });
     }
     bottom -= titleHeight + gutter * 0.75f;
     const float avatar = c.dp(kChannelAvatar);
     const float centerY = bottom - avatar * 0.5f;
+    const float nameX = textX + avatar + c.dp(kBylineGap);
+    const float nameY = centerY - c.lineHeight(theme::kBodySize) * 0.5f;
+    const auto name = [&](std::string_view text, float maxWidth) {
+        medium.line({nameX, nameY + shadow}, maxWidth, theme::kBodySize, kShadow, text);
+        medium.line({nameX, nameY}, maxWidth, theme::kBodySize, kOverlayText, text);
+    };
     if (info) {
         auto& channel = info->channel;
-        drawAvatar(frame, channel.avatar, channel.name, {min.x + gutter + avatar * 0.5f, centerY},
+        drawAvatar(frame, channel.avatar, channel.name, {textX + avatar * 0.5f, centerY},
                    kChannelAvatar);
-        const float nameX = min.x + gutter * 2 + avatar;
         const float nameWidth = medium.measure(theme::kBodySize, channel.name).x;
         const float maxName = std::max(0.0f, width * 0.45f);
-        medium.line({nameX, centerY - c.lineHeight(theme::kBodySize) * 0.5f}, maxName,
-                    theme::kBodySize, theme::g_textPrimary, channel.name);
+        name(channel.name, maxName);
         if (current &&
             frame.touch.tapped({min.x, centerY - avatar * 0.5f},
                                {nameX + std::min(nameWidth, maxName), centerY + avatar * 0.5f})) {
@@ -514,7 +812,7 @@ void App::drawShort(Frame& frame, const innertube::Item& item, bool current, ImV
         }
         const std::string_view label =
             channel.subscribed ? tr(Text::Subscribed) : tr(Text::Subscribe);
-        const float buttonX = nameX + std::min(nameWidth, maxName) + gutter;
+        const float buttonX = nameX + std::min(nameWidth, maxName) + c.dp(kBylineGap);
         const float buttonWidth =
             c.with(theme::kLabelWeight).measure(theme::kBodySize, label).x + gutter * 2;
         const float half = c.dp(theme::kButtonHeight) * 0.45f;
@@ -523,10 +821,9 @@ void App::drawShort(Frame& frame, const innertube::Item& item, bool current, ImV
                                 {buttonX + buttonWidth, centerY + half});
         }
     } else {
-        drawAvatar(frame, itemAvatar(frame, item), item.channel,
-                   {min.x + gutter + avatar * 0.5f, centerY}, kChannelAvatar);
-        medium.line({min.x + gutter * 2 + avatar, centerY - c.lineHeight(theme::kBodySize) * 0.5f},
-                    width * 0.5f, theme::kBodySize, theme::g_textPrimary, item.channel);
+        drawAvatar(frame, itemAvatar(frame, item), item.channel, {textX + avatar * 0.5f, centerY},
+                   kChannelAvatar);
+        name(item.channel, width * 0.5f);
     }
 
     // Playback progress along the bottom edge, and tap anywhere else to pause.
@@ -539,10 +836,8 @@ void App::drawShort(Frame& frame, const innertube::Item& item, bool current, ImV
             c.rect({min.x, max.y - c.dp(kProgressHeight)}, {min.x + width * fraction, max.y},
                    theme::g_textPrimary);
         }
-        if (state == media::PlayerState::Paused) {
-            c.icon(Icon::Play, {(min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f},
-                   theme::kPlayButtonSize, motion::withAlpha(theme::g_textPrimary, 0.8f));
-        }
+        drawPlayFeedback(frame, {(min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f},
+                         state == media::PlayerState::Paused);
         // A second tap soon after likes the short, as in the official app, so a tap pauses only
         // once no second one can follow.
         auto& shorts = m_shorts;
@@ -563,6 +858,7 @@ void App::drawShort(Frame& frame, const innertube::Item& item, bool current, ImV
         }
         if (shorts.tapAt >= 0 && frame.time - shorts.tapAt >= theme::kDoubleTap) {
             shorts.tapAt = -1;
+            shorts.toggledAt = frame.time;
             m_player.setPaused(state == media::PlayerState::Playing);
         } else if (shorts.tapAt >= 0) {
             frame.animating = true;

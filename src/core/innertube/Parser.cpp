@@ -798,6 +798,23 @@ void videoDetails(Element root, Item& item) {
     item.channelId = json::string(root, "/videoDetails/channelId");
 }
 
+std::string_view likeAnimation(Element root) {
+    std::string_view url;
+    // Both states name the same file; the liked one is what plays. The 1.7 MB of element
+    // templates beside the overlay are skipped.
+    json::forEachKey(root, "likeButtonViewModel",
+                     [&](Element like) {
+                         if (url.empty()) {
+                             url = json::string(
+                                 like, "/toggleButtonViewModel/toggleButtonViewModel/"
+                                       "toggledButtonViewModel/buttonViewModel/leadingAsset/"
+                                       "animatedAssetViewModel/lottieAsset/themedUrl/dark");
+                         }
+                     },
+                     {"frameworkUpdates"});
+    return url;
+}
+
 Page reelSequence(Element root) {
     Page page;
     json::forEachKey(root, "reelWatchEndpoint", [&](Element endpoint) {

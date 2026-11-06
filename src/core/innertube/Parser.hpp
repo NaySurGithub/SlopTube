@@ -67,6 +67,10 @@ void videoDetails(json::Element root, Item& item);
 
 [[nodiscard]] std::string_view visitorData(json::Element root);
 
+// URL of the Lottie file a `reel/reel_item_watch` overlay gives its like button, in its dark
+// variant (the Shorts player is always dark); empty when the short has none.
+[[nodiscard]] std::string_view likeAnimation(json::Element root);
+
 // Message of an `error` object returned instead of a regular response, if any.
 [[nodiscard]] std::string_view errorMessage(json::Element root);
 

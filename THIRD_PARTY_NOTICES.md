@@ -11,6 +11,7 @@ repository.
 | [simdjson](https://github.com/simdjson/simdjson) | JSON parsing | MIT (offered under Apache-2.0 or MIT) |
 | [curl](https://curl.se) | HTTP transport | curl licence |
 | [Mbed TLS](https://github.com/Mbed-TLS/mbedtls) | TLS for curl on Android | Apache-2.0 (offered under Apache-2.0 or GPL-2.0-or-later) |
+| [ThorVG](https://github.com/thorvg/thorvg), with its bundled RapidJSON | Lottie animations of the Shorts like button (Android) | MIT |
 | Unicode Character Database | Tables generated into `src/app/ui/text/UnicodeTables.cpp` | Unicode License v3 |
 
 Fonts are the phone's own system fonts, read at run time; none are distributed.
@@ -266,6 +267,56 @@ OR OTHER DEALINGS IN THE SOFTWARE.
 Except as contained in this notice, the name of a copyright holder shall not
 be used in advertising or otherwise to promote the sale, use or other dealings
 in this Software without prior written authorization of the copyright holder.
+```
+
+## ThorVG
+
+```
+MIT License
+
+Copyright (c) 2020 - 2026 ThorVG Project
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### RapidJSON (inside ThorVG's Lottie loader)
+
+```
+Copyright (C) 2015 THL A29 Limited, a Tencent company, and Milo Yip. All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
 
 ## Mbed TLS

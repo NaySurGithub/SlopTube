@@ -106,3 +106,40 @@ if(ANDROID)
         IMGUI_DISABLE_DEBUG_TOOLS IMGUI_USE_WCHAR32 IMGUI_ENABLE_FREETYPE)
     target_link_libraries(imgui PUBLIC freetype android EGL GLESv3)
 endif()
+
+# --- ThorVG: Lottie animations of the Shorts like button (app only) ----------------------------
+# Built here from its sources with only what is used: the Lottie loader and the software
+# rasteriser (no threads, expressions, fonts or images), since its own build system is Meson.
+if(ANDROID)
+    FetchContent_Declare(thorvg
+        GIT_REPOSITORY https://github.com/thorvg/thorvg.git
+        GIT_TAG v1.1.3
+        GIT_SHALLOW TRUE
+        SOURCE_SUBDIR none # Sources only: there is no CMake build to add.
+        SYSTEM)
+    FetchContent_MakeAvailable(thorvg)
+
+    set(thorvg_src "${thorvg_SOURCE_DIR}/src")
+    file(GLOB thorvg_sources
+        "${thorvg_src}/common/*.cpp"
+        "${thorvg_src}/renderer/*.cpp"
+        "${thorvg_src}/renderer/cpu_engine/*.cpp"
+        "${thorvg_src}/loaders/lottie/*.cpp"
+        "${thorvg_src}/loaders/raw/*.cpp")
+    add_library(thorvg STATIC ${thorvg_sources})
+    # Meson writes this file; the features themselves are switched by the definitions below.
+    set(thorvg_config "${CMAKE_CURRENT_BINARY_DIR}/thorvg-config")
+    file(WRITE "${thorvg_config}/config.h" "#define THORVG_VERSION_STRING \"1.1.3\"\n")
+    target_include_directories(thorvg SYSTEM PUBLIC "${thorvg_SOURCE_DIR}/inc")
+    target_include_directories(thorvg PRIVATE
+        "${thorvg_config}" "${thorvg_src}/common" "${thorvg_src}/renderer"
+        "${thorvg_src}/renderer/cpu_engine" "${thorvg_src}/loaders/lottie"
+        "${thorvg_src}/loaders/raw")
+    target_compile_definitions(thorvg PUBLIC TVG_STATIC)
+    target_compile_definitions(thorvg PRIVATE
+        THORVG_CPU_ENGINE_SUPPORT=1 THORVG_LOTTIE_LOADER_SUPPORT=1
+        $<$<STREQUAL:${ANDROID_ABI},arm64-v8a>:THORVG_NEON_SUPPORT=1>)
+    target_compile_options(thorvg PRIVATE
+        -w -fno-exceptions -fno-rtti -fno-math-errno -fvisibility=hidden
+        $<$<CONFIG:Debug>:-O2>) # Rasterising stays fast enough to judge in debug builds.
+endif()

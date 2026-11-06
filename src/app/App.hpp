@@ -8,6 +8,7 @@
 #include "app/platform/Display.hpp"
 #include "app/platform/Platform.hpp"
 #include "app/ui/Avatars.hpp"
+#include "app/ui/LottieSheet.hpp"
 #include "app/ui/PostCard.hpp"
 #include "app/ui/SeekUndo.hpp"
 #include "app/ui/Subtitles.hpp"
@@ -316,6 +317,11 @@ private:
         double tapAt = -1;
         double burstAt = -1; // The like animation, where the second tap landed.
         ImVec2 burstCentre{};
+        double toggledAt = -1; // Play/pause feedback.
+        // The like button's topic animation (see Api::likeAnimation): asked once per short.
+        std::string likeAnimationFor; // Video id it was asked for.
+        std::string likeAnimationUrl; // The file rendered into `likeAnimation`.
+        LottieSheet likeAnimation;
     };
 
     // The listening screen of voice search, over everything else while open.
@@ -595,8 +601,15 @@ private:
     [[nodiscard]] static std::string downloadStatus(const Download& download);
     void drawToast(Frame& frame, ImVec2 min, ImVec2 max);
     void drawShorts(Frame& frame, ImVec2 min, ImVec2 max);
-    // The like animation of a double tap on a short: a white thumb popping in a burst.
+    // The like animation of a double tap on a short: a red-to-pink heart rising where it landed.
     void drawLikeBurst(Frame& frame);
+    // The like button of the action column, animated when the like toggles on: the short's topic
+    // animation when the server gives one, the thumb's own otherwise.
+    void drawLikeIcon(Frame& frame, bool liked, ImVec2 center, float scale);
+    // The topic animation of the short being played, when signed in (only then can it be liked).
+    void loadLikeAnimation(const std::string& videoId);
+    // Play/pause feedback in the middle of a short, and the paused state's button.
+    void drawPlayFeedback(Frame& frame, ImVec2 center, bool paused);
     void drawShort(Frame& frame, const innertube::Item& item, bool current, ImVec2 min, ImVec2 max);
     void playShort(const innertube::Item& item);
     // Fetches what the shorts next to `index` need so that swiping to them is instant.

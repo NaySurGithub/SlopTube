@@ -54,6 +54,17 @@ enum class Icon : std::uint8_t {
     ChevronDown,    // Opens a list ("Accounts").
     MoreVertical,   // ⋮ Actions of a video card.
     MoreHorizontal, // ••• Actions of a shelf tile or a list row.
+    // The Shorts player's action column. Unlike the others these are drawn on a 32-unit grid with
+    // a stroke that scales with them (2 units), the proportions of the official app's 32 dp
+    // Shorts drawables, where the glyph spans about 26 of the 32 units.
+    ReelLike,
+    ReelLikeFilled,
+    ReelDislike,
+    ReelDislikeFilled,
+    ReelComment,
+    ReelShare,
+    ReelSave,
+    ReelSaveFilled,
 };
 
 // Horizontal placement of wrapped text in its box. Natural follows the paragraph direction: left
