@@ -83,8 +83,12 @@ public:
     void setUploadNotifications(bool enabled);
     // Hands the downloaded APK at `apk` to Android's installer, which asks the user to confirm.
     void installUpdate(const std::filesystem::path& apk);
-    // Opens Android's speech recognizer; what it hears comes back as a VoiceSearch bridge event.
-    void startVoiceSearch();
+    // Starts listening for a voice search: the words, the sound level and the query come back
+    // as bridge events. False when the device has no recognition service: its own screen opens
+    // instead, and only the query comes back.
+    [[nodiscard]] bool startVoiceSearch();
+    void finishVoiceSearch(); // Recognises what was heard so far.
+    void cancelVoiceSearch();
 
     // Colour emoji drawn by the system's text stack (android.graphics.Paint).
     [[nodiscard]] bool hasGlyph(char32_t codepoint);

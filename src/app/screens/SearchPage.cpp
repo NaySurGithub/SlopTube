@@ -194,7 +194,7 @@ void App::drawSearch(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
     c.icon(Icon::Mic, mic, theme::kIconSize, theme::g_textPrimary);
     if (frame.touch.tapped({mic.x - c.dp(kFieldHeight) * 0.5f, min.y},
                            {mic.x + c.dp(kFieldHeight) * 0.5f, contentMin.y})) {
-        m_platform.startVoiceSearch();
+        later([this] { openVoiceSearch(); });
     }
 
     const float fieldX = min.x + c.dp(kFieldX);

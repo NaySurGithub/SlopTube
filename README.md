@@ -40,7 +40,7 @@ without a copy.
 
 - **Feeds** - Home with Shorts shelves and community posts, Subscriptions, history, playlists,
   and channels with their Videos, Shorts, Live and Playlists tabs
-- **Search** - suggestions while typing, past searches, and filters (date, type, duration, live,
+- **Search** - suggestions while typing, voice search, past searches, and filters (date, type, duration, live,
   HD, 4K, subtitles, popularity)
 - **Account** - Google sign-in with a device code, several accounts, likes, subscriptions,
   comments and replies, saving to playlists

@@ -342,11 +342,16 @@ std::int32_t App::onInput(const AInputEvent* event) {
 // --- Navigation ---------------------------------------------------------------------------------
 
 bool App::canGoBack() const {
-    return m_fullscreen || m_watch.menu != PlayerMenu::None || m_sheet.kind != Sheet::None ||
-           !m_stack.empty() || m_tab != Tab::Home || m_mini.watch.has_value();
+    return m_voice.open || m_fullscreen || m_watch.menu != PlayerMenu::None ||
+           m_sheet.kind != Sheet::None || !m_stack.empty() || m_tab != Tab::Home ||
+           m_mini.watch.has_value();
 }
 
 void App::goBack() {
+    if (m_voice.open) {
+        closeVoiceSearch();
+        return;
+    }
     if (m_watch.menu != PlayerMenu::None) {
         switch (m_watch.menu) {
         case PlayerMenu::Translations:
@@ -995,6 +1000,11 @@ void App::drawInterface(Frame& frame, ImVec2 min, ImVec2 max, ImVec2 display) {
     const bool watchPage = !m_stack.empty() && m_stack.back().route == Route::Watch;
     m_platform.setLightSystemBars(!theme::g_isDark && !darkScreen && !watchPage,
                                   !theme::g_isDark && !darkScreen);
+    // Voice search covers everything and takes every touch.
+    const bool voice = m_voice.open;
+    if (voice) {
+        m_touch.setBlocked(true);
+    }
     const bool modal = m_sheet.modal();
     if (modal) {
         list->ChannelsSplit(2);
@@ -1010,7 +1020,8 @@ void App::drawInterface(Frame& frame, ImVec2 min, ImVec2 max, ImVec2 display) {
     }
     // Nothing under the launch animation reacts to touch.
     const bool splash = !m_splash.finished;
-    if (splash) {
+    const bool covered = splash || voice;
+    if (covered) {
         m_touch.setBlocked(true);
     }
     if (m_stack.empty()) {
@@ -1018,13 +1029,17 @@ void App::drawInterface(Frame& frame, ImVec2 min, ImVec2 max, ImVec2 display) {
     } else {
         drawScreen(frame, m_stack.back(), min, max);
     }
-    m_touch.setBlocked(modal || splash);
+    m_touch.setBlocked(modal || covered);
     if (m_mini.watch) {
         drawMiniPlayer(frame, min, max);
     }
-    m_touch.setBlocked(splash);
+    m_touch.setBlocked(covered);
     if (modal) {
         list->ChannelsMerge();
+    }
+    if (voice) {
+        m_touch.setBlocked(splash);
+        drawVoiceSearch(frame, display);
     }
     drawToast(frame, min, max);
     drawSplash(frame, display);

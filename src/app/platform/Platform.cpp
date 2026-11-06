@@ -398,10 +398,30 @@ void Platform::installUpdate(const std::filesystem::path& apk) {
                           javaString(m_env, apk.string()));
 }
 
-void Platform::startVoiceSearch() {
+bool Platform::startVoiceSearch() {
     const LocalFrame frame(m_env);
     jobject activity = m_app->activity->clazz;
-    m_env->CallVoidMethod(activity, method(m_env, activity, "startVoiceSearch", "()V"));
+    const bool listening =
+        m_env->CallBooleanMethod(activity, method(m_env, activity, "startVoiceSearch", "()Z")) ==
+        JNI_TRUE;
+    if (m_env->ExceptionCheck()) {
+        m_env->ExceptionDescribe();
+        m_env->ExceptionClear();
+        return false;
+    }
+    return listening;
+}
+
+void Platform::finishVoiceSearch() {
+    const LocalFrame frame(m_env);
+    jobject activity = m_app->activity->clazz;
+    m_env->CallVoidMethod(activity, method(m_env, activity, "finishVoiceSearch", "()V"));
+}
+
+void Platform::cancelVoiceSearch() {
+    const LocalFrame frame(m_env);
+    jobject activity = m_app->activity->clazz;
+    m_env->CallVoidMethod(activity, method(m_env, activity, "cancelVoiceSearch", "()V"));
 }
 
 innertube::Locale Platform::locale() const {

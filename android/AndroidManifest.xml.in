@@ -20,6 +20,15 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Installing the app's own updates (Settings, release builds). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Voice search, asked for the first time the microphone is tapped. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- The speech recognition service, which Android 11 hides from apps that do not name it. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
 
     <application
         android:label="@SLOPTUBE_APP_NAME@"
