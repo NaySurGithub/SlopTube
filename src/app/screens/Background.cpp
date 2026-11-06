@@ -5,6 +5,8 @@
 #include "app/ui/Strings.hpp"
 #include "app/ui/Theme.hpp"
 
+#include <tuple>
+
 namespace sloptube::app {
 namespace {
 
@@ -187,6 +189,22 @@ void App::drawPictureInPicture(Frame& frame, ImVec2 display) {
                   frame.time);
         frame.animating = true;
     }
+}
+
+void App::reportPlayback() {
+    // A few seconds in, so that videos only skipped past leave no trace.
+    constexpr std::int64_t kReportAfterUs = 5'000'000;
+    const innertube::VideoDetails* details = m_player.details();
+    if (details == nullptr || details->id == m_reportedVideo ||
+        m_player.state() != media::PlayerState::Playing || !m_session.signedIn() ||
+        m_player.positionUs() < kReportAfterUs) {
+        return;
+    }
+    m_reportedVideo = details->id;
+    m_tasks.run([this, id = details->id, seconds = m_player.positionUs() / 1'000'000] {
+        // Nothing to show for a failure: the video plays on, it is only missing from the history.
+        std::ignore = m_api.reportPlayback(id, seconds);
+    });
 }
 
 void App::syncPlayback() {

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <random>
 #include <utility>
 
 namespace sloptube::innertube {
@@ -224,6 +225,20 @@ constexpr ClientKind kMetadataClient = ClientKind::Tv;
 constexpr ClientKind kCaptionsClient = ClientKind::Android;
 // VISIONOS, MWEB and TV send no storyboards; Android and iOS do.
 constexpr ClientKind kStoryboardClient = ClientKind::Android;
+
+// Identifies one playback to the statistics service: 16 characters of a URL-safe alphabet.
+std::string playbackNonce() {
+    constexpr std::string_view kAlphabet =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    constexpr std::size_t kLength = 16;
+    std::random_device random;
+    std::uniform_int_distribution<std::size_t> pick(0, kAlphabet.size() - 1);
+    std::string nonce;
+    for (std::size_t i = 0; i < kLength; ++i) {
+        nonce += kAlphabet[pick(random)];
+    }
+    return nonce;
+}
 
 // Endpoints that only read, so a stalled request can be sent again; actions never are.
 constexpr bool isRead(Endpoint endpoint) {
@@ -749,6 +764,65 @@ Result<Player> Api::player(std::string_view videoId) {
         failures += "; ";
     }
     return fail("player: " + failures);
+}
+
+Result<void> Api::reportPlayback(std::string_view videoId, std::int64_t positionSeconds) {
+    if (!m_session.signedIn()) {
+        return fail("playback report: not signed in");
+    }
+    // The streams come from clients without the account, whose tracking addresses would count
+    // for nobody: these come from the one client that sends it.
+    const std::string nonce = playbackNonce();
+    auto body = openBody();
+    body.field("videoId", videoId)
+        .field("cpn", nonce)
+        .field("contentCheckOk", true)
+        .field("racyCheckOk", true);
+    body.beginObject("playbackContext")
+        .beginObject("contentPlaybackContext")
+        .field("signatureTimestamp", clientProfile(kMetadataClient).signatureTimestamp)
+        .endObject()
+        .endObject();
+    auto root = checked(Endpoint::Player, kMetadataClient, std::move(body));
+    if (!root) {
+        return std::unexpected(root.error());
+    }
+    // Both addresses already name the video, its length and the viewer (`docid`, `len`, `ei`,
+    // `vm`, `of`); the playback only adds what it did.
+    const std::string playback(
+        json::string(*root, "/playbackTracking/videostatsPlaybackUrl/baseUrl"));
+    const std::string watchtime(
+        json::string(*root, "/playbackTracking/videostatsWatchtimeUrl/baseUrl"));
+    if (playback.empty() || watchtime.empty()) {
+        return fail("playback report: no tracking address (" +
+                    std::string(json::string(*root, "/playabilityStatus/reason")) + ")");
+    }
+    auto authorization = m_session.authorization();
+    if (!authorization) {
+        return std::unexpected(authorization.error());
+    }
+
+    const auto send = [&](const std::string& address, const std::string& query) -> Result<void> {
+        auto response = m_http.send({
+            .url = address + (address.contains('?') ? "&" : "?") + query,
+            .headers = {"User-Agent: " + userAgent(kMetadataClient),
+                        "Authorization: " + *authorization},
+        });
+        if (!response) {
+            return std::unexpected(response.error());
+        }
+        if (!response->ok()) {
+            return fail("playback report: HTTP " + std::to_string(response->status));
+        }
+        return {};
+    };
+    // The playback event creates the history entry; the watch time sets how far it was watched.
+    const std::string common = "ver=2&cpn=" + nonce;
+    if (auto sent = send(playback, common + "&cmt=0"); !sent) {
+        return sent;
+    }
+    const std::string position = std::to_string(positionSeconds);
+    return send(watchtime, common + "&cmt=" + position + "&st=0&et=" + position + "&state=playing");
 }
 
 Result<Captions> Api::captions(std::string_view videoId) {

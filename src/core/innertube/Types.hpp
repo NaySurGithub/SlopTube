@@ -184,8 +184,6 @@ struct Player {
     VideoDetails details;
     std::vector<Format> formats;
     Storyboard storyboard;
-    std::string playbackTrackingUrl; // Reporting this marks the video as watched in history.
-    std::string watchtimeTrackingUrl;
 };
 
 // A subtitle track of a video, fetched from the timedtext service.

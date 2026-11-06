@@ -335,6 +335,7 @@ private:
     void syncPlayback();
     // Plays the next video once one ends: after a countdown on screen, at once otherwise.
     void updateAutoplay();
+    void reportPlayback(); // Adds what is playing to the account's history, once it has started.
     void playNext();
     void drawAutoplay(Frame& frame, ImVec2 min, ImVec2 max);
     // Picture-in-picture: only the video, filling the window.
@@ -624,6 +625,7 @@ private:
     innertube::SearchFilters m_filters;
     bool m_filtersOpen = false;
     float m_searchFiltersHeight = 0; // Measured on the previous frame.
+    std::string m_reportedVideo;     // Last video added to the account's history.
     WatchState m_watch;
     SignInState m_signIn;
     SheetState m_sheet;

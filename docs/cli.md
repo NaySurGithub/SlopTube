@@ -24,7 +24,9 @@ build/host-debug/tools/cli/sloptube-cli <command> [args]
 | `accounts` | Profiles visible to the signed-in account |
 | `posts [channel id]` | Posts of subscribed channels as the home feed shows them, or one channel's posts tab |
 | `post <channel id> [index]` | One post of that channel opened like its page: post, comments, replies of the first thread with some |
+| `watched <video id> [seconds]` | Adds the video to the signed-in account's history, watched up to `seconds` (30 by default) |
 | `player <video id>` | Playable formats (itag, resolution, bitrate, MIME type, segment length for a live stream) and storyboard levels |
 
 The session lives in `~/.config/studio.kanye.sloptube/session.json` (mode `0600`). The CLI never
-likes, subscribes or comments, so it is safe to run against a personal account.
+likes, subscribes or comments, so it is safe to run against a personal account; only `watched`
+changes anything on it.

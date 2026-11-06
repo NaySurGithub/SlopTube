@@ -48,6 +48,7 @@ server assigned on the first response (keeping one visitor identity avoids bot c
 | `watch(videoId)` | `next` | `videoId` | `watch` |
 | `comments(token)` | `next` | `continuation` | `comments` |
 | `player(videoId)` | `player` | `videoId`, `contentCheckOk`, `racyCheckOk` | `player` |
+| `reportPlayback(videoId, position)` | `player` (TV, with the account), then GET on its `playbackTracking` addresses (see [Watch history](#watch-history)) | `videoId`, `cpn`, `playbackContext.contentPlaybackContext.signatureTimestamp` | none |
 | `storyboard(videoId)` | `player` (ANDROID) | same | `storyboard` |
 | `channelPosts(id)` | `browse` (MWEB) | `browseId` = channel id, `params` = the channel's posts tab | `posts` |
 | `postDetail(params)` | `browse` (MWEB) | `browseId` = `FEpost_detail`, `params` from the post | `posts` (+ comments token) |
@@ -190,6 +191,31 @@ through `continuationItemRenderer`; `parser::comments` handles both shapes.
 own vote is unknown (anonymous reads), and `like/like` with `target.postId` is answered with
 success whatever the target (even a made-up id) without changing the public count, so the app
 shows a toast instead of pretending.
+
+## Watch history
+
+The app adds a video to the account's history once it has played for 5 s (`App::reportPlayback`),
+as the official clients do: through the statistics addresses of a player response made for the
+account. The streams come from anonymous clients, whose addresses count for nobody (they answer
+204 and nothing appears), so `reportPlayback` asks the TV client, with the account, for a second
+player response and only uses its `playbackTracking`:
+
+1. `player` (TV) with `videoId`, a fresh `cpn` (16 characters of `A-Za-z0-9-_`) and
+   `playbackContext.contentPlaybackContext.signatureTimestamp`. The timestamp is the TV player's
+   own, from `tv-player-ias-tcl.js` (8 digits, e.g. `20760001`, kept in `ClientProfile.cpp`).
+   Without it, or with the 5-digit value of the other players, the server refuses with
+   `UNPLAYABLE` "The page needs to be reloaded" and sends no tracking addresses. Measured: every
+   8-digit value tried (20000001 to 20765001) was accepted, so a stale one keeps working for a
+   while; bump it with the TV version.
+2. GET `videostatsPlaybackUrl` + `&ver=2&cpn=<cpn>&cmt=0`: creates the history entry.
+3. GET `videostatsWatchtimeUrl` + `&ver=2&cpn=<cpn>&cmt=<s>&st=0&et=<s>&state=playing`: sets how
+   far it was watched (the tile's `percentDurationWatched`).
+
+Both GETs carry the `Authorization` header and answer 204. The addresses already hold the video,
+its length and the viewer (`docid`, `len`, `ei`, `vm`, `of`, `el=leanback`). Measured: the video
+heads `FEhistory` within 30 s, and reporting 60 s then 300 s of a 635 s video showed 10 % then
+47 %. No PO token is involved. This follows SmartTube (MediaServiceCore `TrackingService`, with
+the same timestamp from its `TclPlayerDataExtractor`) and yt-dlp's `--mark-watched`.
 
 ## Mixes
 

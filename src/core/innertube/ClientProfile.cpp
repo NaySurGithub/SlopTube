@@ -23,6 +23,10 @@ constexpr std::array kProfiles{
         .osVersion = {},
         .androidSdkVersion = 0,
         .acceptsOAuth = true,
+        // The TV player's own value (`signatureTimestamp:` in tv-player-ias-tcl.js, 8 digits):
+        // with the 5-digit one of the other players, or none, a signed-in player request is
+        // refused ("The page needs to be reloaded") and brings no tracking addresses.
+        .signatureTimestamp = 20760001,
     },
     ClientProfile{
         .kind = ClientKind::Android,
@@ -36,6 +40,7 @@ constexpr std::array kProfiles{
         .osVersion = "15",
         .androidSdkVersion = 35,
         .acceptsOAuth = false,
+        .signatureTimestamp = 0,
     },
     ClientProfile{
         .kind = ClientKind::Ios,
@@ -50,6 +55,7 @@ constexpr std::array kProfiles{
         .osVersion = "18.3.2.22D82",
         .androidSdkVersion = 0,
         .acceptsOAuth = false,
+        .signatureTimestamp = 0,
     },
     ClientProfile{
         .kind = ClientKind::Mweb,
@@ -65,6 +71,7 @@ constexpr std::array kProfiles{
         .osVersion = "15",
         .androidSdkVersion = 0,
         .acceptsOAuth = false,
+        .signatureTimestamp = 0,
     },
     ClientProfile{
         .kind = ClientKind::VisionOs,
@@ -80,6 +87,7 @@ constexpr std::array kProfiles{
         .osVersion = {},
         .androidSdkVersion = 0,
         .acceptsOAuth = false,
+        .signatureTimestamp = 0,
     },
 };
 
