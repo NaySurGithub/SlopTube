@@ -119,13 +119,13 @@ void App::drawSubscriptions(Frame& frame, ImVec2 min, ImVec2 max) {
                         const ImVec2 dot{center.x + avatar * kDotOffset,
                                          center.y + avatar * kDotOffset};
                         c.list()->AddCircleFilled(dot, c.dp(kNewDot) * 0.5f + c.dp(2),
-                                                  theme::kBackground);
-                        c.list()->AddCircleFilled(dot, c.dp(kNewDot) * 0.5f, theme::kLink);
+                                                  theme::g_background);
+                        c.list()->AddCircleFilled(dot, c.dp(kNewDot) * 0.5f, theme::g_link);
                     }
                     // Names are cut at the avatar's width, as on the official app.
                     const float nameWidth = avatar + c.dp(kNameOverhang);
                     c.line({center.x - nameWidth * 0.5f, rowTop + avatar + c.dp(kNameGap)},
-                           nameWidth, theme::kCaptionSize, theme::kTextPrimary, item.channel,
+                           nameWidth, theme::kCaptionSize, theme::g_textPrimary, item.channel,
                            TextAlign::Center);
                     if (!m_channelsScroller.moving() &&
                         f.touch.tapped({x - c.dp(8), rowTop}, {x + avatar + c.dp(8), rowBottom})) {
@@ -141,7 +141,7 @@ void App::drawSubscriptions(Frame& frame, ImVec2 min, ImVec2 max) {
                 const ImVec2 all = medium.measure(theme::kBodySize, tr(Text::AllChannels));
                 const float allX = top.x + w - c.dp(kRowMargin) - all.x;
                 const float allY = rowTop + (avatar - all.y) * 0.5f;
-                medium.text({allX, allY}, theme::kBodySize, theme::kLink, tr(Text::AllChannels));
+                medium.text({allX, allY}, theme::kBodySize, theme::g_link, tr(Text::AllChannels));
                 if (f.touch.tapped({rowMax.x, rowTop}, {top.x + w, rowTop + avatar})) {
                     later([this] {
                         Screen screen{.route = Route::AllSubscriptions,

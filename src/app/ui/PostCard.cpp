@@ -153,14 +153,14 @@ void drawChoices(const Canvas& c, const innertube::Post& post, ImVec2 min, float
     const float height = c.dp(kChoiceHeight);
     float y = min.y;
     for (const auto& choice : post.choices) {
-        c.list()->AddRect({min.x, y}, {min.x + width, y + height}, theme::kSurfacePressed,
+        c.list()->AddRect({min.x, y}, {min.x + width, y + height}, theme::g_surfacePressed,
                           c.dp(kChoiceRadius), c.dp(kBorder));
         c.line({min.x + padding, y + (height - c.lineHeight(theme::kBodySize)) * 0.5f},
-               width - padding * 2, theme::kBodySize, theme::kTextPrimary, choice);
+               width - padding * 2, theme::kBodySize, theme::g_textPrimary, choice);
         y += height + c.dp(kChoiceGap);
     }
     if (!post.votes.empty()) {
-        c.text({min.x, y}, theme::kCaptionSize, theme::kTextSecondary, post.votes);
+        c.text({min.x, y}, theme::kCaptionSize, theme::g_textSecondary, post.votes);
     }
 }
 
@@ -173,11 +173,11 @@ bool drawVideo(Frame& frame, const innertube::Item& video, ImVec2 min, float wid
     float y = thumbnailMax.y + c.dp(kVideoGap);
     const float titleHeight = c.lineHeight(theme::kBodySize) * kVideoTitleLines;
     c.with(theme::kTitleWeight)
-        .paragraph({min.x, y}, width, theme::kBodySize, theme::kTextPrimary, video.title,
+        .paragraph({min.x, y}, width, theme::kBodySize, theme::g_textPrimary, video.title,
                    kVideoTitleLines);
     y += titleHeight;
     c.with(theme::kLabelWeight)
-        .line({min.x, y}, width, theme::kCaptionSize, theme::kTextSecondary,
+        .line({min.x, y}, width, theme::kCaptionSize, theme::g_textSecondary,
               video.channel.empty() ? video.detail
                                     : video.channel + std::string(kSeparator) + video.detail);
     return tappedIn(frame, min, {min.x + width, y + c.lineHeight(theme::kCaptionSize)});
@@ -219,9 +219,9 @@ PostAction drawPostCard(Frame& frame, PostCard& card, ImVec2 origin, float width
     const float nameWidth = origin.x + width - gutter - nameX;
     const float namesTop =
         headerTop + (l.header - c.lineHeight(theme::kBodySize) * 2 - c.dp(kNameGap)) * 0.5f;
-    medium.line({nameX, namesTop}, nameWidth, theme::kBodySize, theme::kTextPrimary, post.author);
+    medium.line({nameX, namesTop}, nameWidth, theme::kBodySize, theme::g_textPrimary, post.author);
     c.line({nameX, namesTop + c.lineHeight(theme::kBodySize) + c.dp(kNameGap)}, nameWidth,
-           theme::kBodySize, theme::kTextSecondary, post.published);
+           theme::kBodySize, theme::g_textSecondary, post.published);
     const float namesRight =
         nameX + std::min(nameWidth, std::max(medium.measure(theme::kBodySize, post.author).x,
                                              c.measure(theme::kBodySize, post.published).x));
@@ -233,10 +233,10 @@ PostAction drawPostCard(Frame& frame, PostCard& card, ImVec2 origin, float width
     if (l.textLines > 0) {
         const float top = origin.y + l.textTop;
         const float textHeight =
-            c.paragraph({origin.x + gutter, top}, inner, kTextSize, theme::kTextPrimary, post.text,
+            c.paragraph({origin.x + gutter, top}, inner, kTextSize, theme::g_textPrimary, post.text,
                         clamped(card, layout) ? kClampedLines : kAllLines);
         if (l.truncated) {
-            c.text({origin.x + gutter, top + textHeight}, theme::kBodySize, theme::kTextSecondary,
+            c.text({origin.x + gutter, top + textHeight}, theme::kBodySize, theme::g_textSecondary,
                    tr(Text::ReadMore));
             if (tappedIn(frame, {origin.x, top},
                          {cardMax.x, top + textHeight + c.lineHeight(theme::kBodySize)})) {
@@ -265,14 +265,14 @@ PostAction drawPostCard(Frame& frame, PostCard& card, ImVec2 origin, float width
     const float icon = c.dp(theme::kIconSize);
     const float textY = centerY - c.lineHeight(theme::kBodySize) * 0.5f;
     float x = origin.x + gutter;
-    c.icon(Icon::ThumbUp, {x + icon * 0.5f, centerY}, theme::kIconSize, theme::kTextPrimary);
+    c.icon(Icon::ThumbUp, {x + icon * 0.5f, centerY}, theme::kIconSize, theme::g_textPrimary);
     x += icon;
     if (!post.likes.empty()) {
-        c.text({x + c.dp(kActionGap), textY}, theme::kBodySize, theme::kTextPrimary, post.likes);
+        c.text({x + c.dp(kActionGap), textY}, theme::kBodySize, theme::g_textPrimary, post.likes);
         x += c.dp(kActionGap) + c.measure(theme::kBodySize, post.likes).x;
     }
     x += gutter * 2;
-    c.icon(Icon::ThumbDown, {x + icon * 0.5f, centerY}, theme::kIconSize, theme::kTextPrimary);
+    c.icon(Icon::ThumbDown, {x + icon * 0.5f, centerY}, theme::kIconSize, theme::g_textPrimary);
     x += icon + gutter;
     if (tappedIn(frame, {origin.x, actionsTop}, {x, actionsBottom})) {
         action = PostAction::Rate;
@@ -281,11 +281,11 @@ PostAction drawPostCard(Frame& frame, PostCard& card, ImVec2 origin, float width
     const float countWidth = c.measure(theme::kBodySize, post.commentCount).x;
     float right = origin.x + width - gutter;
     if (countWidth > 0) {
-        c.text({right - countWidth, textY}, theme::kBodySize, theme::kTextPrimary,
+        c.text({right - countWidth, textY}, theme::kBodySize, theme::g_textPrimary,
                post.commentCount);
         right -= countWidth + c.dp(kActionGap);
     }
-    c.icon(Icon::Comment, {right - icon * 0.5f, centerY}, theme::kIconSize, theme::kTextPrimary);
+    c.icon(Icon::Comment, {right - icon * 0.5f, centerY}, theme::kIconSize, theme::g_textPrimary);
     if (tappedIn(frame, {right - icon - gutter, actionsTop}, {cardMax.x, actionsBottom})) {
         action = PostAction::Open;
     }

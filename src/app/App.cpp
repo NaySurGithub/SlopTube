@@ -126,7 +126,7 @@ void drawProgressBar(const Canvas& c, float x0, float x1, float y0, float y1, fl
         if (to <= from) {
             continue;
         }
-        c.rect({from, y0}, {to, y1}, theme::kTrack);
+        c.rect({from, y0}, {to, y1}, theme::g_track);
         if (filledX > from) {
             c.rect({from, y0}, {std::min(to, filledX), y1}, theme::kAccent);
         }
@@ -144,11 +144,12 @@ constexpr float kChipRadius = 8;           // dp
 
 // The input fields' colours, which ImGui draws by itself.
 void applyStyleColors(ImGuiStyle& style) {
-    style.Colors[ImGuiCol_FrameBg] = ImGui::ColorConvertU32ToFloat4(theme::kSurface);
+    style.Colors[ImGuiCol_FrameBg] = ImGui::ColorConvertU32ToFloat4(theme::g_surface);
     style.Colors[ImGuiCol_FrameBgHovered] = style.Colors[ImGuiCol_FrameBg];
     style.Colors[ImGuiCol_FrameBgActive] = style.Colors[ImGuiCol_FrameBg];
-    style.Colors[ImGuiCol_Text] = ImGui::ColorConvertU32ToFloat4(theme::kTextPrimary);
-    style.Colors[ImGuiCol_TextDisabled] = ImGui::ColorConvertU32ToFloat4(theme::kTextSecondary);
+    style.Colors[ImGuiCol_Text] = ImGui::ColorConvertU32ToFloat4(theme::g_textPrimary);
+    style.Colors[ImGuiCol_InputTextCursor] = style.Colors[ImGuiCol_Text];
+    style.Colors[ImGuiCol_TextDisabled] = ImGui::ColorConvertU32ToFloat4(theme::g_textSecondary);
 }
 
 } // namespace
@@ -596,12 +597,12 @@ void App::drawScrubPreview(Frame& frame, ImVec2 min, ImVec2 max, std::int64_t ti
     c.list()->AddRectFilled(pillMin, pillMax, kTimePill, c.dp(kTimePillHeight) * 0.5f);
     medium.text(
         {pillMin.x + c.dp(kTimePillPadding), pillMin.y + (c.dp(kTimePillHeight) - extent.y) * 0.5f},
-        kTimePillSize, theme::kTextPrimary, time);
+        kTimePillSize, theme::g_textPrimary, time);
     if (m_watch.info && !m_watch.info->chapters.empty()) {
         const float gutter = c.dp(theme::kGutter);
         medium.line(
             {min.x + gutter, pillMin.y - c.dp(kChapterTitleGap) - c.lineHeight(theme::kBodySize)},
-            max.x - min.x - gutter * 2, theme::kBodySize, theme::kTextPrimary,
+            max.x - min.x - gutter * 2, theme::kBodySize, theme::g_textPrimary,
             m_watch.info->chapters[chapterAt(timeMs)].title, TextAlign::Center);
     }
 }
@@ -636,7 +637,7 @@ void App::drawFineSeek(Frame& frame, ImVec2 min, ImVec2 max) {
         const Texture* sheet =
             preview ? m_thumbnails->get(preview->url, preview->sheetWidth) : nullptr;
         if (!sheet) {
-            c.rect(at, to, theme::kPlaceholder);
+            c.rect(at, to, theme::g_placeholder);
             frame.animating |= preview.has_value(); // Until the sheet arrives.
             continue;
         }
@@ -667,18 +668,18 @@ void App::drawFineSeek(Frame& frame, ImVec2 min, ImVec2 max) {
                          timeMin.y + timeHeight};
     c.rect(timeMin, timeMax, theme::kOverlayButton, c.dp(theme::kPillRadius));
     c.text({timeMin.x + c.dp(kFineTimePaddingX), timeMin.y + c.dp(kFineTimePaddingY)},
-           kTimePillSize, theme::kTextPrimary, time);
+           kTimePillSize, theme::g_textPrimary, time);
     const float radius = c.dp(kFinePlayButton) * 0.5f;
     const ImVec2 play{centreX, timeMin.y - c.dp(kFineSpacing) - radius};
     list->AddCircleFilled(play, radius, theme::kOverlayButton);
-    c.icon(Icon::Play, play, theme::kIconSize, theme::kTextPrimary);
+    c.icon(Icon::Play, play, theme::kIconSize, theme::g_textPrimary);
     if (frame.touch.tapped({play.x - radius, play.y - radius},
                            {play.x + radius, play.y + radius})) {
         closeFineSeek(true);
     } else if (iconButton(frame, Icon::Close,
                           {max.x - c.dp(theme::kTopBarHeight) * 0.5f,
                            min.y + c.dp(theme::kTopBarHeight) * 0.5f},
-                          theme::kTextPrimary)) {
+                          theme::g_textPrimary)) {
         closeFineSeek(m_watch.fineResume);
     }
 }
@@ -962,7 +963,7 @@ bool App::frame() {
     ImGui::Render();
 
     glViewport(0, 0, static_cast<GLsizei>(display.x), static_cast<GLsizei>(display.y));
-    const ImVec4 clear = ImGui::ColorConvertU32ToFloat4(theme::kBackground);
+    const ImVec4 clear = ImGui::ColorConvertU32ToFloat4(theme::g_background);
     glClearColor(clear.x, clear.y, clear.z, 1);
     glClear(GL_COLOR_BUFFER_BIT);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -988,10 +989,12 @@ void App::drawInterface(Frame& frame, ImVec2 min, ImVec2 max, ImVec2 display) {
     // Modal sheets are drawn first on a top layer so they get input before the screen beneath,
     // which only sees touches that started outside them.
     ImDrawList* list = frame.canvas.list();
-    // Both keep black behind the status bar, so its icons stay light there.
-    const bool overVideo =
-        m_stack.empty() ? m_tab == Tab::Shorts : m_stack.back().route == Route::Watch;
-    m_platform.setLightSystemBars(!theme::isDark && !overVideo);
+    // The launch animation and Shorts are dark from top to bottom; the watch page keeps black
+    // behind the status bar only.
+    const bool darkScreen = !m_splash.finished || (m_stack.empty() && m_tab == Tab::Shorts);
+    const bool watchPage = !m_stack.empty() && m_stack.back().route == Route::Watch;
+    m_platform.setLightSystemBars(!theme::g_isDark && !darkScreen && !watchPage,
+                                  !theme::g_isDark && !darkScreen);
     const bool modal = m_sheet.modal();
     if (modal) {
         list->ChannelsSplit(2);
@@ -1231,11 +1234,11 @@ void App::drawTab(Frame& frame, ImVec2 min, ImVec2 max) {
     list->PushClipRect({min.x, min.y}, {max.x, max.y}, true);
     drawHomeBar(frame, {min.x, -topShift}, width);
     list->PopClipRect();
-    frame.canvas.rect({min.x, 0}, {max.x, min.y}, theme::kBackground);
+    frame.canvas.rect({min.x, 0}, {max.x, min.y}, theme::g_background);
     list->PushClipRect({min.x, 0}, {max.x, max.y}, true);
     drawNavigationBar(frame, {min.x, contentMax.y + navShift}, width);
     list->PopClipRect();
-    frame.canvas.rect({min.x, max.y}, {max.x, max.y + m_insets.bottom}, theme::kBackground);
+    frame.canvas.rect({min.x, max.y}, {max.x, max.y + m_insets.bottom}, theme::g_background);
 }
 
 void App::openSearch() {
@@ -1248,7 +1251,7 @@ void App::openSearch() {
 void App::drawHomeBar(Frame& frame, ImVec2 origin, float width) {
     const Canvas& c = frame.canvas;
     const float height = m_insets.top + c.dp(theme::kTopBarHeight);
-    c.rect(origin, {origin.x + width, origin.y + height}, theme::kBackground);
+    c.rect(origin, {origin.x + width, origin.y + height}, theme::g_background);
     const float centerY = origin.y + m_insets.top + c.dp(theme::kTopBarHeight) * 0.5f;
 
     // Measured on the official app: the last icon 24 dp from the right edge, 48 dp between icons.
@@ -1268,30 +1271,30 @@ void App::drawHomeBar(Frame& frame, ImVec2 origin, float width) {
         const ImVec2 pillMin{origin.x + c.dp(theme::kGutter), centerY - pillHeight * 0.5f};
         const ImVec2 pillMax{pillMin.x + pillWidth, pillMin.y + pillHeight};
         drawPressed(frame, pillMin, pillMax, kChipRadius * 2);
-        c.list()->AddRect(pillMin, pillMax, theme::kOutline, pillHeight * 0.5f, c.dp(1));
+        c.list()->AddRect(pillMin, pillMax, theme::g_outline, pillHeight * 0.5f, c.dp(1));
         medium.text({pillMin.x + c.dp(kAccountsPillPadding),
                      centerY - c.lineHeight(theme::kCaptionSize) * 0.5f},
-                    theme::kCaptionSize, theme::kTextPrimary, label);
+                    theme::kCaptionSize, theme::g_textPrimary, label);
         c.icon(Icon::ChevronDown, {pillMax.x - c.dp(kAccountsPillPadding + 6), centerY}, 16,
-               theme::kTextPrimary);
+               theme::g_textPrimary);
         if (frame.touch.tapped(pillMin, pillMax) && m_session.signedIn()) {
             later([this] { openSheet(Sheet::Accounts); });
         }
-        if (iconButton(frame, Icon::Settings, {nextIcon(), centerY}, theme::kTextPrimary)) {
+        if (iconButton(frame, Icon::Settings, {nextIcon(), centerY}, theme::g_textPrimary)) {
             later([this] { openSettings(); });
         }
     } else {
         const ImVec2 accent = c.measure(theme::kWordmarkSize, kWordmarkAccent);
         const ImVec2 at{origin.x + c.dp(theme::kGutter) + c.dp(4), centerY - accent.y * 0.5f};
         c.text(at, theme::kWordmarkSize, theme::kAccent, kWordmarkAccent);
-        c.text({at.x + accent.x, at.y}, theme::kWordmarkSize, theme::kTextPrimary, kWordmarkRest);
+        c.text({at.x + accent.x, at.y}, theme::kWordmarkSize, theme::g_textPrimary, kWordmarkRest);
     }
-    if (iconButton(frame, Icon::Search, {nextIcon(), centerY}, theme::kTextPrimary)) {
+    if (iconButton(frame, Icon::Search, {nextIcon(), centerY}, theme::g_textPrimary)) {
         later([this] { openSearch(); });
     }
     if (m_session.signedIn()) {
         const ImVec2 bell{nextIcon(), centerY};
-        if (iconButton(frame, Icon::Bell, bell, theme::kTextPrimary)) {
+        if (iconButton(frame, Icon::Bell, bell, theme::g_textPrimary)) {
             later([this] { openNotifications(); });
         }
         drawUnreadBadge(c, bell, unreadNotifications());
@@ -1301,10 +1304,10 @@ void App::drawHomeBar(Frame& frame, ImVec2 origin, float width) {
 void App::drawTitleBar(Frame& frame, std::string_view title, ImVec2 origin, float width) {
     const Canvas& c = frame.canvas;
     const float height = m_insets.top + c.dp(theme::kTopBarHeight);
-    c.rect(origin, {origin.x + width, origin.y + height}, theme::kBackground);
+    c.rect(origin, {origin.x + width, origin.y + height}, theme::g_background);
     const float centerY = origin.y + m_insets.top + c.dp(theme::kTopBarHeight) * 0.5f;
     const float icon = c.dp(theme::kTopBarHeight) * 0.5f;
-    if (iconButton(frame, Icon::Back, {origin.x + icon, centerY}, theme::kTextPrimary)) {
+    if (iconButton(frame, Icon::Back, {origin.x + icon, centerY}, theme::g_textPrimary)) {
         later([this] { goBack(); });
     }
     // Page titles are bold, as on the official app.
@@ -1312,7 +1315,7 @@ void App::drawTitleBar(Frame& frame, std::string_view title, ImVec2 origin, floa
     c.with(theme::kHeadingWeight)
         .line({textX, centerY - c.lineHeight(theme::kSectionSize) * 0.5f},
               origin.x + width - textX - c.dp(theme::kGutter), theme::kSectionSize,
-              theme::kTextPrimary, title);
+              theme::g_textPrimary, title);
 }
 
 void App::drawSignInPrompt(Frame& frame, ImVec2 min, ImVec2 max) {
@@ -1320,7 +1323,7 @@ void App::drawSignInPrompt(Frame& frame, ImVec2 min, ImVec2 max) {
     const float gutter = c.dp(theme::kGutter) * 2;
     const float width = max.x - min.x - gutter * 2;
     float y = min.y + (max.y - min.y) * 0.3f;
-    y += c.paragraph({min.x + gutter, y}, width, theme::kBodySize, theme::kTextSecondary,
+    y += c.paragraph({min.x + gutter, y}, width, theme::kBodySize, theme::g_textSecondary,
                      tr(Text::SignInPrompt), 4);
     y += c.dp(theme::kGutter);
     const float button = c.measure(theme::kBodySize, tr(Text::SignIn)).x + c.dp(40);
@@ -1380,7 +1383,7 @@ void App::drawYou(Frame& frame, ImVec2 min, ImVec2 max) {
                 const ImVec2 extent = heading.measure(theme::kSectionSize, tr(Text::Library));
                 heading.text({origin.x + c.dp(theme::kShelfSpacing),
                               libraryY + (rowHeight - extent.y) * 0.5f},
-                             theme::kSectionSize, theme::kTextPrimary, tr(Text::Library));
+                             theme::kSectionSize, theme::g_textPrimary, tr(Text::Library));
                 // "Recent" keeps the server's order; "Playlists" sorts them by title.
                 float x = origin.x + c.dp(theme::kShelfSpacing);
                 const float chipsY = libraryY + rowHeight;
@@ -1424,7 +1427,7 @@ void App::drawSignIn(Frame& frame, ImVec2 min, ImVec2 max) {
     const ImVec2 center{(min.x + max.x) * 0.5f, 0};
 
     if (m_signIn.failed) {
-        c.paragraph({min.x + gutter, y}, textWidth, theme::kBodySize, theme::kTextSecondary,
+        c.paragraph({min.x + gutter, y}, textWidth, theme::kBodySize, theme::g_textSecondary,
                     tr(Text::SignInFailed), 3);
         y += c.dp(48);
         const float button = c.measure(theme::kBodySize, tr(Text::Retry)).x + c.dp(40);
@@ -1438,28 +1441,28 @@ void App::drawSignIn(Frame& frame, ImVec2 min, ImVec2 max) {
         return;
     }
     if (!m_signIn.code) {
-        c.spinner({center.x, (min.y + max.y) * 0.5f}, theme::kSpinnerSize, theme::kTextSecondary,
+        c.spinner({center.x, (min.y + max.y) * 0.5f}, theme::kSpinnerSize, theme::g_textSecondary,
                   frame.time);
         frame.animating = true;
         return;
     }
 
     const auto& code = *m_signIn.code;
-    y += c.paragraph({min.x + gutter, y}, textWidth, theme::kBodySize, theme::kTextSecondary,
+    y += c.paragraph({min.x + gutter, y}, textWidth, theme::kBodySize, theme::g_textSecondary,
                      tr(Text::SignInStep), 3);
     const ImVec2 urlExtent = c.measure(theme::kTitleSize, code.verificationUrl);
-    c.text({center.x - urlExtent.x * 0.5f, y + c.dp(8)}, theme::kTitleSize, theme::kLink,
+    c.text({center.x - urlExtent.x * 0.5f, y + c.dp(8)}, theme::kTitleSize, theme::g_link,
            code.verificationUrl);
     y += c.dp(8) + urlExtent.y + c.dp(16);
-    y += c.paragraph({min.x + gutter, y}, textWidth, theme::kBodySize, theme::kTextSecondary,
+    y += c.paragraph({min.x + gutter, y}, textWidth, theme::kBodySize, theme::g_textSecondary,
                      tr(Text::SignInCode), 2);
 
     const ImVec2 codeExtent = c.measure(theme::kCodeSize, code.userCode);
     y += c.dp(16);
     c.rect({center.x - codeExtent.x * 0.5f - c.dp(16), y - c.dp(8)},
-           {center.x + codeExtent.x * 0.5f + c.dp(16), y + codeExtent.y + c.dp(8)}, theme::kSurface,
-           theme::kCornerRadius);
-    c.text({center.x - codeExtent.x * 0.5f, y}, theme::kCodeSize, theme::kTextPrimary,
+           {center.x + codeExtent.x * 0.5f + c.dp(16), y + codeExtent.y + c.dp(8)},
+           theme::g_surface, theme::kCornerRadius);
+    c.text({center.x - codeExtent.x * 0.5f, y}, theme::kCodeSize, theme::g_textPrimary,
            code.userCode);
     y += codeExtent.y + c.dp(40);
 
@@ -1470,11 +1473,11 @@ void App::drawSignIn(Frame& frame, ImVec2 min, ImVec2 max) {
     }
     y += c.dp(theme::kButtonHeight) + c.dp(32);
 
-    c.spinner({center.x, y}, theme::kSpinnerSize * 0.7f, theme::kTextSecondary, frame.time);
+    c.spinner({center.x, y}, theme::kSpinnerSize * 0.7f, theme::g_textSecondary, frame.time);
     frame.animating = true;
     const ImVec2 waitExtent = c.measure(theme::kCaptionSize, tr(Text::Waiting));
     c.text({center.x - waitExtent.x * 0.5f, y + c.dp(24)}, theme::kCaptionSize,
-           theme::kTextSecondary, tr(Text::Waiting));
+           theme::g_textSecondary, tr(Text::Waiting));
 }
 
 void App::drawFeedScreen(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
@@ -1569,7 +1572,7 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
         const float centerY = (min.y + max.y) * 0.5f;
         const float textHeight = c.paragraph(
             {min.x + gutter * 2, centerY - c.dp(theme::kButtonHeight)}, max.x - min.x - gutter * 4,
-            theme::kBodySize, theme::kTextPrimary, tr(Text::CannotPlay), 2, TextAlign::Center);
+            theme::kBodySize, theme::g_textPrimary, tr(Text::CannotPlay), 2, TextAlign::Center);
         const float button = c.measure(theme::kBodySize, tr(Text::Retry)).x + c.dp(40);
         const ImVec2 buttonMin{(min.x + max.x - button) * 0.5f,
                                centerY - c.dp(theme::kButtonHeight) + textHeight + gutter};
@@ -1719,7 +1722,7 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
             const float gutter = c.dp(theme::kGutter);
             c.line({min.x + gutter,
                     barY - c.dp(kTimePillGap) * 0.5f - c.lineHeight(theme::kCaptionSize) * 0.5f},
-                   width - gutter * 2, theme::kCaptionSize, theme::kTextPrimary,
+                   width - gutter * 2, theme::kCaptionSize, theme::g_textPrimary,
                    tr(Text::PullUpForPrecise), TextAlign::Center);
         }
     }
@@ -1731,7 +1734,7 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
     } else if (m_watch.controlsVisible && !hideControls) {
         c.rect(min, max, theme::kScrim);
         if (!loading &&
-            iconButton(frame, playing ? Icon::Pause : Icon::Play, center, theme::kTextPrimary)) {
+            iconButton(frame, playing ? Icon::Pause : Icon::Play, center, theme::g_textPrimary)) {
             m_player.setPaused(playing);
             if (state == media::PlayerState::Ended) {
                 m_player.seek(0);
@@ -1746,7 +1749,7 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
                 c.icon(icon, position, theme::kIconSize, kDisabledControl);
                 return false;
             }
-            return iconButton(frame, icon, position, theme::kTextPrimary);
+            return iconButton(frame, icon, position, theme::g_textPrimary);
         };
         if (skipButton(Icon::SkipPrevious, -1, !m_watchHistory.empty())) {
             later([this] { playPrevious(); });
@@ -1780,7 +1783,7 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
             // goes back to live, as in the official app.
             const float timeY = barY - c.dp(24) + c.lineHeight(theme::kCaptionSize) * 0.5f;
             list->AddCircleFilled({timeX + c.dp(kLiveDot) * 0.5f, timeY}, c.dp(kLiveDot) * 0.5f,
-                                  live->atEdge ? theme::kAccent : theme::kTextSecondary);
+                                  live->atEdge ? theme::kAccent : theme::g_textSecondary);
             const ImVec2 tapMin{left, timeY - c.dp(theme::kChipHeight) * 0.5f};
             timeX += c.dp(kLiveDot + kLiveDotGap);
             time = tr(Text::Live);
@@ -1802,11 +1805,11 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
         }
         // The chapter title runs up to the fullscreen button.
         c.line({timeX, barY - c.dp(24)}, right - c.dp(kButtonInset * 2) - timeX,
-               theme::kCaptionSize, theme::kTextPrimary, time);
+               theme::kCaptionSize, theme::g_textPrimary, time);
 
         if (iconButton(frame, Icon::Settings,
                        {right - c.dp(kButtonInset), min.y + c.dp(kButtonInset)},
-                       theme::kTextPrimary)) {
+                       theme::g_textPrimary)) {
             m_watch.menu = PlayerMenu::Settings;
             m_watch.menuScroller.reset();
         }
@@ -1817,18 +1820,18 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
         if (subtitles.captions().tracks.empty()) {
             c.icon(Icon::Captions, captionsButton, theme::kIconSize, kDisabledControl);
         } else if (iconButton(frame, subtitles.selection() ? Icon::CaptionsOn : Icon::Captions,
-                              captionsButton, theme::kTextPrimary)) {
+                              captionsButton, theme::g_textPrimary)) {
             m_watch.menu = PlayerMenu::Subtitles;
             m_watch.menuScroller.reset();
         }
         if (iconButton(frame, m_fullscreen ? Icon::FullscreenExit : Icon::Fullscreen,
-                       {right - c.dp(kButtonInset), barY - c.dp(18)}, theme::kTextPrimary)) {
+                       {right - c.dp(kButtonInset), barY - c.dp(18)}, theme::g_textPrimary)) {
             setFullscreen(!m_fullscreen);
             m_watch.controlsShownAt = frame.time;
         }
     }
     if (loading) {
-        c.spinner(center, theme::kSpinnerSize * 1.4f, theme::kTextPrimary, frame.time);
+        c.spinner(center, theme::kSpinnerSize * 1.4f, theme::g_textPrimary, frame.time);
         frame.animating = true;
     }
     list->PopClipRect();
@@ -1884,10 +1887,10 @@ void App::drawPill(const Canvas& c, float centreX, float top, std::string_view l
     c.rect(pillMin, pillMax, theme::kBadge, theme::kPillRadius);
     const float centerY = (pillMin.y + pillMax.y) * 0.5f;
     c.text({pillMin.x + padding, centerY - c.lineHeight(theme::kBodySize) * 0.5f}, theme::kBodySize,
-           theme::kTextPrimary, label);
+           theme::g_textPrimary, label);
     if (icon) {
         c.icon(*icon, {pillMin.x + padding + textWidth + gap + c.dp(kIcon) * 0.5f, centerY}, kIcon,
-               theme::kTextPrimary);
+               theme::g_textPrimary);
     }
 }
 
@@ -1932,11 +1935,11 @@ void App::drawZoomableVideo(Frame& frame, ImVec2 min, ImVec2 max) {
         // Circled factor, e.g. "2.7x".
         const float radius = c.dp(kZoomBadgeSize) * 0.5f;
         const ImVec2 centre{centreX, top + radius};
-        c.list()->AddCircle(centre, radius, theme::kTextPrimary, 0, c.dp(kZoomBadgeStroke));
+        c.list()->AddCircle(centre, radius, theme::g_textPrimary, 0, c.dp(kZoomBadgeStroke));
         const std::string label = std::format("{:.1f}x", zoom);
         const ImVec2 size = c.measure(theme::kBodySize, label);
         c.text({centre.x - size.x * 0.5f, centre.y - c.lineHeight(theme::kBodySize) * 0.5f},
-               theme::kBodySize, theme::kTextPrimary, label);
+               theme::kBodySize, theme::g_textPrimary, label);
     } else if ((pinching && nearFill) || (m_zoom == fill && m_zoomedToFillAt >= 0 &&
                                           frame.time - m_zoomedToFillAt < kZoomPillSeconds)) {
         drawPill(c, centreX, top, tr(Text::ZoomedToFill));
@@ -2088,13 +2091,13 @@ std::optional<std::size_t> App::drawMenu(Frame& frame, ImVec2 min, ImVec2 max,
     const float width = std::min(c.dp(kWidth), max.x - min.x - gutter * 2);
     const ImVec2 panelMin{(min.x + max.x - width) * 0.5f, (min.y + max.y - height) * 0.5f};
     const ImVec2 panelMax{panelMin.x + width, panelMin.y + height};
-    c.rect(panelMin, panelMax, theme::kSurfaceRaised, theme::kCornerRadius);
+    c.rect(panelMin, panelMax, theme::g_surfaceRaised, theme::kCornerRadius);
 
     const auto textY = [&](float rowTop, float size) {
         return rowTop + (rowHeight - c.lineHeight(size)) * 0.5f;
     };
     c.text({panelMin.x + gutter, textY(panelMin.y, theme::kCaptionSize)}, theme::kCaptionSize,
-           theme::kTextSecondary, title);
+           theme::g_textSecondary, title);
 
     const ImVec2 listMin{panelMin.x, panelMin.y + rowHeight};
     m_watch.menuScroller.update(m_touch, listMin, panelMax, content, frame.seconds, c.dp(1));
@@ -2115,20 +2118,20 @@ std::optional<std::size_t> App::drawMenu(Frame& frame, ImVec2 min, ImVec2 max,
         const ImVec2 radio{panelMin.x + gutter + c.dp(kRadio), top + rowHeight * 0.5f};
         if (entry.submenu) {
             c.icon(Icon::ChevronRight, {panelMax.x - gutter - c.dp(kRadio), radio.y},
-                   theme::kIconSize, theme::kTextSecondary);
+                   theme::kIconSize, theme::g_textSecondary);
         }
         if (!entry.submenu || entry.selected) {
             list->AddCircle(radio, c.dp(kRadio),
-                            entry.selected ? theme::kTextPrimary : theme::kTrack, 0,
+                            entry.selected ? theme::g_textPrimary : theme::g_track, 0,
                             c.dp(theme::kIconStroke));
         }
         if (entry.selected) {
-            list->AddCircleFilled(radio, c.dp(kRadio) * 0.5f, theme::kTextPrimary);
+            list->AddCircleFilled(radio, c.dp(kRadio) * 0.5f, theme::g_textPrimary);
         }
         const float labelX = radio.x + c.dp(kRadio) + gutter;
         c.line({labelX, textY(top, theme::kBodySize)},
                panelMax.x - labelX - gutter - (entry.submenu ? c.dp(kRadio * 2) : 0),
-               theme::kBodySize, theme::kTextPrimary, entry.label);
+               theme::kBodySize, theme::g_textPrimary, entry.label);
         if (m_touch.tapped(rowMin, rowMax)) {
             tapped = row;
         }

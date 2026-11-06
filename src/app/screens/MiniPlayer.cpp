@@ -171,14 +171,14 @@ void App::drawMiniPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
         const float fraction =
             std::clamp(static_cast<float>(m_player.positionUs()) / duration, 0.0f, 1.0f);
         const float barTop = windowMax.y - c.dp(kProgressHeight);
-        c.rect({windowMin.x, barTop}, windowMax, theme::kTrack);
+        c.rect({windowMin.x, barTop}, windowMax, theme::g_track);
         c.rect({windowMin.x, barTop}, {std::lerp(windowMin.x, windowMax.x, fraction), windowMax.y},
                theme::kAccent);
     }
     // The bar moves with the video frames, which wake the loop themselves.
     if (state == media::PlayerState::Loading || m_player.buffering()) {
         c.spinner({(windowMin.x + windowMax.x) * 0.5f, (windowMin.y + windowMax.y) * 0.5f},
-                  theme::kSpinnerSize, theme::kTextPrimary, frame.time);
+                  theme::kSpinnerSize, theme::g_textPrimary, frame.time);
         frame.animating = true;
     }
 
@@ -199,16 +199,16 @@ void App::drawMiniPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
         const ImVec2 center{(windowMin.x + windowMax.x) * 0.5f, (windowMin.y + windowMax.y) * 0.5f};
         const bool playing = state == media::PlayerState::Playing;
         if (iconButton(frame, Icon::Close, {windowMin.x + inset, windowMin.y + inset},
-                       theme::kTextPrimary)) {
+                       theme::g_textPrimary)) {
             later([this] { closeMiniPlayer(); });
             return;
         }
         if (iconButton(frame, Icon::Fullscreen, {windowMax.x - inset, windowMin.y + inset},
-                       theme::kTextPrimary)) {
+                       theme::g_textPrimary)) {
             later([this] { restoreVideo(); });
             return;
         }
-        if (iconButton(frame, playing ? Icon::Pause : Icon::Play, center, theme::kTextPrimary)) {
+        if (iconButton(frame, playing ? Icon::Pause : Icon::Play, center, theme::g_textPrimary)) {
             m_player.setPaused(playing);
             m_mini.controlsShownAt = frame.time;
             return;

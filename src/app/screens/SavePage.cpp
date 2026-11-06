@@ -130,7 +130,7 @@ void App::drawSaveSheet(Frame& frame, ImVec2 min, ImVec2 max) {
 
     float y = min.y + c.dp(kSheetTop);
     c.with(theme::kHeadingWeight)
-        .text({min.x + gutter * 1.5f, y}, theme::kSheetTitleSize, theme::kTextPrimary,
+        .text({min.x + gutter * 1.5f, y}, theme::kSheetTitleSize, theme::g_textPrimary,
               tr(m_save.creating ? Text::NewPlaylist : Text::SaveVideoTo));
     y += c.lineHeight(theme::kSheetTitleSize) + gutter;
 
@@ -154,7 +154,7 @@ void App::drawSaveSheet(Frame& frame, ImVec2 min, ImVec2 max) {
         const ImVec2 buttonMax{max.x - gutter, y + fieldHeight};
         if (m_save.submitting) {
             c.spinner({(buttonMin.x + buttonMax.x) * 0.5f, (buttonMin.y + buttonMax.y) * 0.5f},
-                      theme::kSpinnerSize, theme::kTextPrimary, frame.time);
+                      theme::kSpinnerSize, theme::g_textPrimary, frame.time);
             frame.animating = true;
         } else if (pillButton(frame, tr(Text::CreatePlaylist), buttonMin, buttonMax,
                               m_save.title[0] != 0)) {
@@ -174,11 +174,11 @@ void App::drawSaveSheet(Frame& frame, ImVec2 min, ImVec2 max) {
             const bool selected = m_save.privacy == privacy;
             const ImVec2 chipMin{x, y};
             const ImVec2 chipMax{x + width, y + chip};
-            c.rect(chipMin, chipMax, selected ? theme::kTextPrimary : theme::kSurface,
+            c.rect(chipMin, chipMax, selected ? theme::g_textPrimary : theme::g_surface,
                    theme::kCornerRadius);
             drawPressed(frame, chipMin, chipMax, theme::kCornerRadius);
             medium.text({x + gutter * 0.75f, y + (chip - c.lineHeight(theme::kCaptionSize)) * 0.5f},
-                        theme::kCaptionSize, selected ? theme::kTextOnLight : theme::kTextPrimary,
+                        theme::kCaptionSize, selected ? theme::g_textOnLight : theme::g_textPrimary,
                         label);
             if (frame.touch.tapped(chipMin, chipMax)) {
                 m_save.privacy = privacy;
@@ -193,11 +193,11 @@ void App::drawSaveSheet(Frame& frame, ImVec2 min, ImVec2 max) {
     const ImVec2 listMax{max.x, max.y - row - c.dp(4) - gutter};
     if (m_save.loading) {
         c.spinner({(min.x + max.x) * 0.5f, (listMin.y + listMax.y) * 0.5f}, theme::kSpinnerSize,
-                  theme::kTextPrimary, frame.time);
+                  theme::g_textPrimary, frame.time);
         frame.animating = true;
     } else if (m_save.failed) {
         c.line({min.x + gutter, (listMin.y + listMax.y - c.lineHeight(theme::kBodySize)) * 0.5f},
-               max.x - min.x - gutter * 2, theme::kBodySize, theme::kTextSecondary,
+               max.x - min.x - gutter * 2, theme::kBodySize, theme::g_textSecondary,
                tr(Text::ActionFailed), TextAlign::Center);
     } else {
         auto& scroller = m_save.scroller;
@@ -216,15 +216,15 @@ void App::drawSaveSheet(Frame& frame, ImVec2 min, ImVec2 max) {
             drawPressed(frame, rowMin, rowMax);
             const float centerY = top + row * 0.5f;
             c.icon(option.contains ? Icon::CheckboxOn : Icon::CheckboxOff, {iconX, centerY},
-                   theme::kIconSize, theme::kTextPrimary);
+                   theme::kIconSize, theme::g_textPrimary);
             const std::string_view privacy = privacyLabel(option.privacy);
             const float privacyWidth = c.measure(theme::kCaptionSize, privacy).x;
             c.line({textX, centerY - c.lineHeight(theme::kBodySize) * 0.5f},
-                   max.x - textX - privacyWidth - gutter * 3, theme::kBodySize, theme::kTextPrimary,
-                   option.title);
+                   max.x - textX - privacyWidth - gutter * 3, theme::kBodySize,
+                   theme::g_textPrimary, option.title);
             c.text({max.x - gutter * 1.5f - privacyWidth,
                     centerY - c.lineHeight(theme::kCaptionSize) * 0.5f},
-                   theme::kCaptionSize, theme::kTextSecondary, privacy);
+                   theme::kCaptionSize, theme::g_textSecondary, privacy);
             if (!scroller.moving() && frame.touch.tapped(rowMin, rowMax)) {
                 later([this, i] { toggleSaved(i); });
             }
@@ -233,14 +233,14 @@ void App::drawSaveSheet(Frame& frame, ImVec2 min, ImVec2 max) {
     }
 
     y = listMax.y;
-    c.rect({min.x, y}, {max.x, y + c.dp(1)}, theme::kDivider);
+    c.rect({min.x, y}, {max.x, y + c.dp(1)}, theme::g_divider);
     y += c.dp(4);
     const ImVec2 rowMin{min.x, y};
     const ImVec2 rowMax{max.x, y + row};
     drawPressed(frame, rowMin, rowMax);
-    c.icon(Icon::Add, {iconX, y + row * 0.5f}, theme::kIconSize, theme::kTextPrimary);
+    c.icon(Icon::Add, {iconX, y + row * 0.5f}, theme::kIconSize, theme::g_textPrimary);
     medium.text({textX, y + (row - c.lineHeight(theme::kBodySize)) * 0.5f}, theme::kBodySize,
-                theme::kTextPrimary, tr(Text::NewPlaylist));
+                theme::g_textPrimary, tr(Text::NewPlaylist));
     if (frame.touch.tapped(rowMin, rowMax)) {
         m_save.creating = true;
         m_save.focusTitle = true;

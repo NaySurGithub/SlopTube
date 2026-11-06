@@ -40,8 +40,8 @@ void App::drawNavigationBar(Frame& frame, ImVec2 origin, float width) {
     const Canvas& c = frame.canvas;
     const float height = c.dp(theme::kBottomBarHeight);
     const ImVec2 max{origin.x + width, origin.y + height + m_insets.bottom};
-    c.rect(origin, max, theme::kBackground);
-    c.rect(origin, {max.x, origin.y + c.dp(1)}, theme::kDivider);
+    c.rect(origin, max, theme::g_background);
+    c.rect(origin, {max.x, origin.y + c.dp(1)}, theme::g_divider);
 
     const auto accounts = m_session.accounts();
     const float slot = width / static_cast<float>(kSlots.size());
@@ -57,8 +57,8 @@ void App::drawNavigationBar(Frame& frame, ImVec2 origin, float width) {
             const float radius = c.dp(kCreateSize) * 0.5f;
             const bool pressed = frame.touch.pressed(slotMin, slotMax);
             c.list()->AddCircleFilled(center, radius,
-                                      pressed ? theme::kSurfacePressed : theme::kSurface);
-            m_icons->draw(c.list(), Glyph::Create, center, theme::kTextPrimary);
+                                      pressed ? theme::g_surfacePressed : theme::g_surface);
+            m_icons->draw(c.list(), Glyph::Create, center, theme::g_textPrimary);
             if (frame.touch.tapped(slotMin, slotMax)) {
                 later([this] { showToast(tr(Text::CreateUnavailable)); });
             }
@@ -68,7 +68,7 @@ void App::drawNavigationBar(Frame& frame, ImVec2 origin, float width) {
         const bool selected = m_tab == *item.tab;
         const ImVec2 iconCenter{centerX, origin.y + c.dp(kIconCenter)};
         if (frame.touch.pressed(slotMin, slotMax)) {
-            c.list()->AddCircleFilled(iconCenter, c.dp(theme::kIconSize), theme::kSurfacePressed);
+            c.list()->AddCircleFilled(iconCenter, c.dp(theme::kIconSize), theme::g_surfacePressed);
             frame.animating = true;
         }
         if (*item.tab == Tab::You && !accounts.empty()) {
@@ -77,16 +77,16 @@ void App::drawNavigationBar(Frame& frame, ImVec2 origin, float width) {
             if (selected) {
                 c.list()->AddCircle(iconCenter,
                                     c.dp(theme::kIconSize * 0.5f + kRingGap + kAvatarRing * 0.5f),
-                                    theme::kTextPrimary, 0, c.dp(kAvatarRing));
+                                    theme::g_textPrimary, 0, c.dp(kAvatarRing));
             }
         } else {
             m_icons->draw(c.list(), selected ? item.filled : item.outline, iconCenter,
-                          theme::kTextPrimary);
+                          theme::g_textPrimary);
         }
         const std::string_view label = tr(item.label);
         const ImVec2 extent = c.measure(theme::kNavLabelSize, label);
         c.text({centerX - extent.x * 0.5f, origin.y + c.dp(kLabelCenter) - extent.y * 0.5f},
-               theme::kNavLabelSize, theme::kTextPrimary, label);
+               theme::kNavLabelSize, theme::g_textPrimary, label);
         if (frame.touch.tapped(slotMin, slotMax)) {
             later([this, tab = *item.tab] { selectTab(tab); });
         }

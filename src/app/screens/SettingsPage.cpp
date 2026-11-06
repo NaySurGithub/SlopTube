@@ -164,7 +164,7 @@ void App::drawSettings(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
     y += row + gutter * 2;
 
     const std::string version = std::string(build::kAppName) + ' ' + std::string(build::kVersion);
-    c.line({min.x + gutter, y}, width - gutter * 2, theme::kCaptionSize, theme::kTextSecondary,
+    c.line({min.x + gutter, y}, width - gutter * 2, theme::kCaptionSize, theme::g_textSecondary,
            version, TextAlign::Center);
     c.list()->PopClipRect();
 

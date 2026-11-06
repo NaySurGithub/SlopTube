@@ -84,11 +84,11 @@ void App::drawSheet(Frame& frame, ImVec2 min, ImVec2 max) {
     motion::Layer layer(c.list());
     const float height = max.y + (modal ? m_insets.bottom : 0) - min.y;
     c.list()->AddRectFilled(min, {max.x, max.y + (modal ? m_insets.bottom : 0)},
-                            modal ? theme::kSurfaceRaised : theme::kBackground,
+                            modal ? theme::g_surfaceRaised : theme::g_background,
                             c.dp(theme::kSheetRadius), ImDrawFlags_RoundCornersTop);
     c.rect({(min.x + max.x - c.dp(kHandleWidth)) * 0.5f, min.y + c.dp(8)},
            {(min.x + max.x + c.dp(kHandleWidth)) * 0.5f, min.y + c.dp(8 + kHandleHeight)},
-           theme::kSheetHandle, kHandleHeight);
+           theme::g_sheetHandle, kHandleHeight);
     switch (m_sheet.kind) {
     case Sheet::Comments:
         drawCommentsSheet(frame, min, max);
@@ -162,9 +162,9 @@ void App::drawToast(Frame& frame, ImVec2 min, ImVec2 max) {
     const float lift = (1 - motion::easeOutCubic(alpha)) * c.dp(16);
     const ImVec2 boxMin{(min.x + max.x - width) * 0.5f, max.y - c.dp(kToastBottom) - height + lift};
     motion::Layer layer(c.list());
-    c.rect(boxMin, {boxMin.x + width, boxMin.y + height}, theme::kToast, theme::kCornerRadius);
+    c.rect(boxMin, {boxMin.x + width, boxMin.y + height}, theme::g_toast, theme::kCornerRadius);
     c.line({boxMin.x + padding, boxMin.y + padding * 0.75f}, width - padding * 2, theme::kBodySize,
-           theme::kTextOnLight, m_toast.text, TextAlign::Center);
+           theme::g_textOnLight, m_toast.text, TextAlign::Center);
     layer.end({}, alpha);
 }
 

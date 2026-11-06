@@ -71,43 +71,43 @@ inline constexpr Palette kLightPalette{
 
 // The colours in use, dark until apply() says otherwise. Written once per change, on the main
 // thread, and read like constants everywhere else.
-inline ImU32 kBackground = kDarkPalette.background;
-inline ImU32 kSurface = kDarkPalette.surface;
-inline ImU32 kSurfaceRaised = kDarkPalette.surfaceRaised;
-inline ImU32 kToast = kDarkPalette.toast;
-inline ImU32 kSurfacePressed = kDarkPalette.surfacePressed;
-inline ImU32 kPlaceholder = kDarkPalette.placeholder;
-inline ImU32 kTextPrimary = kDarkPalette.textPrimary;
-inline ImU32 kTextSecondary = kDarkPalette.textSecondary;
-inline ImU32 kTextOnLight = kDarkPalette.textOnLight;
-inline ImU32 kLink = kDarkPalette.link;
-inline ImU32 kOutline = kDarkPalette.outline;
-inline ImU32 kDivider = kDarkPalette.divider;
-inline ImU32 kTrack = kDarkPalette.track;
-inline ImU32 kRipple = kDarkPalette.ripple;
-inline ImU32 kShimmer = kDarkPalette.shimmer;
-inline ImU32 kSheetHandle = kDarkPalette.sheetHandle;
-inline bool isDark = true;
+inline ImU32 g_background = kDarkPalette.background;
+inline ImU32 g_surface = kDarkPalette.surface;
+inline ImU32 g_surfaceRaised = kDarkPalette.surfaceRaised;
+inline ImU32 g_toast = kDarkPalette.toast;
+inline ImU32 g_surfacePressed = kDarkPalette.surfacePressed;
+inline ImU32 g_placeholder = kDarkPalette.placeholder;
+inline ImU32 g_textPrimary = kDarkPalette.textPrimary;
+inline ImU32 g_textSecondary = kDarkPalette.textSecondary;
+inline ImU32 g_textOnLight = kDarkPalette.textOnLight;
+inline ImU32 g_link = kDarkPalette.link;
+inline ImU32 g_outline = kDarkPalette.outline;
+inline ImU32 g_divider = kDarkPalette.divider;
+inline ImU32 g_track = kDarkPalette.track;
+inline ImU32 g_ripple = kDarkPalette.ripple;
+inline ImU32 g_shimmer = kDarkPalette.shimmer;
+inline ImU32 g_sheetHandle = kDarkPalette.sheetHandle;
+inline bool g_isDark = true;
 
 inline void apply(bool dark) {
     const Palette& palette = dark ? kDarkPalette : kLightPalette;
-    isDark = dark;
-    kBackground = palette.background;
-    kSurface = palette.surface;
-    kSurfaceRaised = palette.surfaceRaised;
-    kToast = palette.toast;
-    kSurfacePressed = palette.surfacePressed;
-    kPlaceholder = palette.placeholder;
-    kTextPrimary = palette.textPrimary;
-    kTextSecondary = palette.textSecondary;
-    kTextOnLight = palette.textOnLight;
-    kLink = palette.link;
-    kOutline = palette.outline;
-    kDivider = palette.divider;
-    kTrack = palette.track;
-    kRipple = palette.ripple;
-    kShimmer = palette.shimmer;
-    kSheetHandle = palette.sheetHandle;
+    g_isDark = dark;
+    g_background = palette.background;
+    g_surface = palette.surface;
+    g_surfaceRaised = palette.surfaceRaised;
+    g_toast = palette.toast;
+    g_surfacePressed = palette.surfacePressed;
+    g_placeholder = palette.placeholder;
+    g_textPrimary = palette.textPrimary;
+    g_textSecondary = palette.textSecondary;
+    g_textOnLight = palette.textOnLight;
+    g_link = palette.link;
+    g_outline = palette.outline;
+    g_divider = palette.divider;
+    g_track = palette.track;
+    g_ripple = palette.ripple;
+    g_shimmer = palette.shimmer;
+    g_sheetHandle = palette.sheetHandle;
 }
 
 // While alive (and `active`), the dark colours are in use whatever the appearance: for what is
@@ -115,14 +115,14 @@ inline void apply(bool dark) {
 class DarkScope {
 public:
     explicit DarkScope(bool active = true)
-        : m_wasDark(isDark) {
-        if (active && !isDark) {
+        : m_wasDark(g_isDark) {
+        if (active && !g_isDark) {
             apply(true);
         }
     }
 
     ~DarkScope() {
-        if (isDark != m_wasDark) {
+        if (g_isDark != m_wasDark) {
             apply(m_wasDark);
         }
     }

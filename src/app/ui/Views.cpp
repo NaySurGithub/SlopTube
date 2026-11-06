@@ -149,7 +149,7 @@ void drawCompactMeta(Frame& frame, const Item& item, std::string_view channel, I
         if (text.empty() || x >= right) {
             return;
         }
-        label.line({x, at.y}, right - x, theme::kCaptionSize, theme::kTextSecondary, text);
+        label.line({x, at.y}, right - x, theme::kCaptionSize, theme::g_textSecondary, text);
         x += label.measure(theme::kCaptionSize, text).x + c.dp(kCardMetaSpacing);
     };
     const CompactMeta meta = compactMeta(item.detail);
@@ -158,7 +158,7 @@ void drawCompactMeta(Frame& frame, const Item& item, std::string_view channel, I
         const float size = c.dp(kViewsIcon);
         const float centerY = at.y + c.lineHeight(theme::kCaptionSize) * 0.5f;
         c.list()->AddTriangle({x, centerY - size * 0.5f}, {x, centerY + size * 0.5f},
-                              {x + size * 0.9f, centerY}, theme::kTextSecondary, c.dp(1.2f));
+                              {x + size * 0.9f, centerY}, theme::g_textSecondary, c.dp(1.2f));
         x += size + c.dp(2);
         segment(meta.views);
     }
@@ -197,10 +197,10 @@ bool drawCard(Frame& frame, const Item& item, ImVec2 origin, float width) {
     const float textWidth = menuX - c.dp(kCardMenuGap) - textX;
     const float titleHeight =
         c.with(Weight::Bold)
-            .paragraph({textX, top}, textWidth, theme::kTitleSize, theme::kTextPrimary, item.title,
+            .paragraph({textX, top}, textWidth, theme::kTitleSize, theme::g_textPrimary, item.title,
                        static_cast<int>(kTitleLines));
     c.icon(Icon::MoreHorizontal, {menuX, top + c.lineHeight(theme::kTitleSize) * 0.5f}, 20,
-           theme::kTextPrimary);
+           theme::g_textPrimary);
 
     drawCompactMeta(frame, item, item.channel, {textX, top + titleHeight + c.dp(kCardMetaGap)},
                     textWidth);
@@ -224,11 +224,11 @@ bool drawChannelCard(Frame& frame, const Item& item, ImVec2 origin, float width)
     const float textHeight =
         c.lineHeight(theme::kHeadlineSize) + c.lineHeight(theme::kCaptionSize) * 2;
     float y = top + (avatar - textHeight) * 0.5f;
-    heading.line({textX, y}, textWidth, theme::kHeadlineSize, theme::kTextPrimary, item.title);
+    heading.line({textX, y}, textWidth, theme::kHeadlineSize, theme::g_textPrimary, item.title);
     y += c.lineHeight(theme::kHeadlineSize);
-    c.line({textX, y}, textWidth, theme::kCaptionSize, theme::kTextSecondary, item.channel);
+    c.line({textX, y}, textWidth, theme::kCaptionSize, theme::g_textSecondary, item.channel);
     y += c.lineHeight(theme::kCaptionSize);
-    c.line({textX, y}, textWidth, theme::kCaptionSize, theme::kTextSecondary, item.detail);
+    c.line({textX, y}, textWidth, theme::kCaptionSize, theme::g_textSecondary, item.detail);
 
     const float buttonTop = top + avatar + c.dp(kChannelGap);
     return pillButton(frame, tr(Text::GoToChannel), {origin.x + gutter, buttonTop},
@@ -258,12 +258,12 @@ void drawRow(Frame& frame, const Item& item, ImVec2 origin, float width) {
     const float textX = thumbnailMax.x + gutter;
     const float textWidth = origin.x + width - gutter - textX;
     float y = origin.y;
-    y += c.paragraph({textX, y}, textWidth, theme::kBodySize, theme::kTextPrimary, item.title,
+    y += c.paragraph({textX, y}, textWidth, theme::kBodySize, theme::g_textPrimary, item.title,
                      static_cast<int>(kRowTitleLines - 1));
     y += c.dp(kTextGap);
-    c.line({textX, y}, textWidth, theme::kCaptionSize, theme::kTextSecondary, item.channel);
+    c.line({textX, y}, textWidth, theme::kCaptionSize, theme::g_textSecondary, item.channel);
     y += c.lineHeight(theme::kCaptionSize);
-    c.line({textX, y}, textWidth, theme::kCaptionSize, theme::kTextSecondary, item.detail);
+    c.line({textX, y}, textWidth, theme::kCaptionSize, theme::g_textSecondary, item.detail);
 }
 
 } // namespace
@@ -305,7 +305,7 @@ void drawThumbnail(Frame& frame, const std::string& url, ImVec2 min, ImVec2 max,
                            : std::chrono::duration<float>(frame.now - texture->readyAt).count() /
                                  motion::kFadeDuration;
     if (fade < 1) {
-        c.rect(min, max, theme::kPlaceholder, roundingDp);
+        c.rect(min, max, theme::g_placeholder, roundingDp);
     }
     if (texture == nullptr) {
         return;
@@ -366,11 +366,11 @@ void drawPressed(Frame& frame, ImVec2 min, ImVec2 max, float roundingDp) {
     const Canvas& c = frame.canvas;
     const float diagonal = std::hypot(max.x - min.x, max.y - min.y);
     const float t = frame.touch.pressDuration() * kRippleSpeed;
-    c.rect(min, max, motion::withAlpha(theme::kSurfacePressed, std::min(t * 2, 1.0f) * 0.5f),
+    c.rect(min, max, motion::withAlpha(theme::g_surfacePressed, std::min(t * 2, 1.0f) * 0.5f),
            roundingDp);
     c.list()->PushClipRect(min, max, true);
     c.list()->AddCircleFilled(frame.touch.start(), diagonal * motion::easeOutCubic(t),
-                              theme::kRipple);
+                              theme::g_ripple);
     c.list()->PopClipRect();
     frame.animating = true;
 }
@@ -387,25 +387,25 @@ void drawSkeleton(Frame& frame, ItemStyle style, ImVec2 min, ImVec2 max) {
     for (int row = 0; row < kSkeletonRows && y < max.y; ++row) {
         if (style == ItemStyle::Card) {
             const float thumbnail = width * theme::kAspect16x9;
-            c.rect({min.x, y}, {max.x, y + thumbnail}, theme::kPlaceholder);
+            c.rect({min.x, y}, {max.x, y + thumbnail}, theme::g_placeholder);
             const float top = y + thumbnail + gutter;
             const float avatar = c.dp(theme::kAvatarSize);
             list->AddCircleFilled({min.x + gutter + avatar * 0.5f, top + avatar * 0.5f},
-                                  avatar * 0.5f, theme::kPlaceholder);
+                                  avatar * 0.5f, theme::g_placeholder);
             const float textX = min.x + gutter * 2 + avatar;
-            c.rect({textX, top}, {max.x - gutter * 2, top + line}, theme::kPlaceholder, 4);
+            c.rect({textX, top}, {max.x - gutter * 2, top + line}, theme::g_placeholder, 4);
             c.rect({textX, top + line * 1.6f}, {textX + (max.x - textX) * 0.55f, top + line * 2.6f},
-                   theme::kPlaceholder, 4);
+                   theme::g_placeholder, 4);
             y += cardMetrics(frame, width).height;
         } else {
             const float thumbWidth = c.dp(theme::kRowThumbnailWidth);
             c.rect({min.x + gutter, y},
                    {min.x + gutter + thumbWidth, y + thumbWidth * theme::kAspect16x9},
-                   theme::kPlaceholder, theme::kCornerRadius);
+                   theme::g_placeholder, theme::kCornerRadius);
             const float textX = min.x + gutter * 2 + thumbWidth;
-            c.rect({textX, y}, {max.x - gutter, y + line}, theme::kPlaceholder, 4);
+            c.rect({textX, y}, {max.x - gutter, y + line}, theme::g_placeholder, 4);
             c.rect({textX, y + line * 1.6f}, {textX + (max.x - textX) * 0.5f, y + line * 2.6f},
-                   theme::kPlaceholder, 4);
+                   theme::g_placeholder, 4);
             y += rowHeight(frame);
         }
     }
@@ -415,7 +415,7 @@ void drawSkeleton(Frame& frame, ItemStyle style, ImVec2 min, ImVec2 max) {
         static_cast<float>(std::fmod(frame.time, motion::kShimmerPeriod)) / motion::kShimmerPeriod;
     const float band = width * 0.4f;
     const float x = min.x - band + (width + band * 2) * phase;
-    const ImU32 shimmer = theme::kShimmer;
+    const ImU32 shimmer = theme::g_shimmer;
     list->AddRectFilledMultiColor({x - band, min.y}, {x, max.y}, IM_COL32(0, 0, 0, 0), shimmer,
                                   shimmer, IM_COL32(0, 0, 0, 0));
     list->AddRectFilledMultiColor({x, min.y}, {x + band, max.y}, shimmer, IM_COL32(0, 0, 0, 0),
@@ -512,7 +512,7 @@ std::optional<std::size_t> drawList(Frame& frame, Feed& feed, ItemStyle style, I
     const float footerTop = min.y - offset + content - header.bottom - footer;
     if (more && footerTop < max.y) {
         frame.canvas.spinner({min.x + width * 0.5f, footerTop + footer * 0.5f}, theme::kSpinnerSize,
-                             theme::kTextSecondary, frame.time);
+                             theme::g_textSecondary, frame.time);
         frame.animating = true;
     }
     list->PopClipRect();
@@ -563,10 +563,10 @@ std::optional<std::size_t> drawShelf(Frame& frame, Feed& feed, ImVec2 origin, fl
         const float titleY = thumbnailMax.y + c.dp(kShelfTitleGap);
         float y = titleY;
         y += c.with(theme::kTitleWeight)
-                 .paragraph({x, y}, tile - menuWidth, theme::kBodySize, theme::kTextPrimary,
+                 .paragraph({x, y}, tile - menuWidth, theme::kBodySize, theme::g_textPrimary,
                             item.title, static_cast<int>(kTitleLines));
         c.with(theme::kLabelWeight)
-            .line({x, y}, tile - menuWidth, theme::kCaptionSize, theme::kTextSecondary,
+            .line({x, y}, tile - menuWidth, theme::kCaptionSize, theme::g_textSecondary,
                   item.channel);
         // ••• beside the title, as on the official app.
         const ImVec2 menuMin{x + tile - menuWidth, titleY - c.dp(kTextGap)};
@@ -575,7 +575,7 @@ std::optional<std::size_t> drawShelf(Frame& frame, Feed& feed, ImVec2 origin, fl
             c.icon(Icon::MoreHorizontal,
                    {x + tile - menuWidth * 0.5f + c.dp(4),
                     titleY + c.lineHeight(theme::kBodySize) * 0.5f},
-                   18, theme::kTextPrimary);
+                   18, theme::g_textPrimary);
         }
         if (menu != nullptr && frame.touch.tapped(menuMin, menuMax)) {
             *menu = index;
@@ -593,7 +593,7 @@ bool iconButton(Frame& frame, Icon icon, ImVec2 center, ImU32 color) {
     const ImVec2 max{center.x + half, center.y + half};
     if (frame.touch.pressed(min, max)) {
         const float grow = motion::easeOutCubic(frame.touch.pressDuration() * 6);
-        frame.canvas.list()->AddCircleFilled(center, half * 0.8f * grow, theme::kSurfacePressed);
+        frame.canvas.list()->AddCircleFilled(center, half * 0.8f * grow, theme::g_surfacePressed);
         frame.animating = true;
     }
     frame.canvas.icon(icon, center, theme::kIconSize, color);
@@ -603,14 +603,14 @@ bool iconButton(Frame& frame, Icon icon, ImVec2 center, ImU32 color) {
 bool pillButton(Frame& frame, std::string_view label, ImVec2 min, ImVec2 max, bool primary) {
     const Canvas& c = frame.canvas;
     const bool pressed = frame.touch.pressed(min, max);
-    const ImU32 fill = primary ? theme::kTextPrimary : theme::kSurface;
+    const ImU32 fill = primary ? theme::g_textPrimary : theme::g_surface;
     motion::Layer layer(c.list());
     c.rect(min, max, fill, theme::kPillRadius);
     drawPressed(frame, min, max, theme::kPillRadius);
     const Canvas text = c.with(theme::kLabelWeight);
     const ImVec2 extent = text.measure(theme::kBodySize, label);
     text.text({(min.x + max.x - extent.x) * 0.5f, (min.y + max.y - extent.y) * 0.5f},
-              theme::kBodySize, primary ? theme::kTextOnLight : theme::kTextPrimary, label);
+              theme::kBodySize, primary ? theme::g_textOnLight : theme::g_textPrimary, label);
     layer.end({}, 1, pressed ? motion::kPressScale : 1,
               {(min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f});
     return frame.touch.tapped(min, max);
@@ -625,10 +625,10 @@ bool textRow(Frame& frame, std::string_view label, ImVec2 origin, float width) {
     const float margin = c.dp(theme::kShelfSpacing); // Section titles line up with the shelves.
     const ImVec2 extent = heading.measure(theme::kSectionSize, label);
     heading.text({origin.x + margin, origin.y + (height - extent.y) * 0.5f}, theme::kSectionSize,
-                 theme::kTextPrimary, label);
+                 theme::g_textPrimary, label);
     c.icon(Icon::ChevronRight,
            {origin.x + margin + extent.x + c.dp(theme::kIconSize) * 0.6f, origin.y + height * 0.5f},
-           theme::kIconSize * 0.8f, theme::kTextPrimary);
+           theme::kIconSize * 0.8f, theme::g_textPrimary);
     return frame.touch.tapped(origin, max);
 }
 
@@ -655,10 +655,10 @@ bool chipButton(Frame& frame, std::string_view label, ImVec2 origin, bool select
     const float height = c.dp(theme::kChipHeight);
     const float width = medium.measure(theme::kBodySize, label).x + gutter * 2;
     const ImVec2 max{origin.x + width, origin.y + height};
-    c.rect(origin, max, selected ? theme::kTextPrimary : theme::kSurface, theme::kCornerRadius);
+    c.rect(origin, max, selected ? theme::g_textPrimary : theme::g_surface, theme::kCornerRadius);
     drawPressed(frame, origin, max, theme::kCornerRadius);
     medium.text({origin.x + gutter, origin.y + (height - c.lineHeight(theme::kBodySize)) * 0.5f},
-                theme::kBodySize, selected ? theme::kTextOnLight : theme::kTextPrimary, label);
+                theme::kBodySize, selected ? theme::g_textOnLight : theme::g_textPrimary, label);
     x += width + c.dp(kChipSpacing);
     return frame.touch.tapped(origin, max);
 }
@@ -678,19 +678,19 @@ bool switchRow(Frame& frame, std::string_view label, std::string_view detail, Im
     const float textWidth = width - gutter * 2 - trackWidth;
     const float textHeight = c.lineHeight(theme::kBodySize) + c.lineHeight(theme::kCaptionSize);
     const float textTop = origin.y + (height - textHeight) * 0.5f;
-    c.line({origin.x + gutter, textTop}, textWidth, theme::kBodySize, theme::kTextPrimary, label);
+    c.line({origin.x + gutter, textTop}, textWidth, theme::kBodySize, theme::g_textPrimary, label);
     c.line({origin.x + gutter, textTop + c.lineHeight(theme::kBodySize)}, textWidth,
-           theme::kCaptionSize, theme::kTextSecondary, detail);
+           theme::kCaptionSize, theme::g_textSecondary, detail);
 
     if (on) {
         const float centerY = origin.y + height * 0.5f;
         const ImVec2 trackMin{max.x - gutter - c.dp(kTrackWidth),
                               centerY - c.dp(kTrackHeight) * 0.5f};
         const ImVec2 trackMax{max.x - gutter, centerY + c.dp(kTrackHeight) * 0.5f};
-        c.rect(trackMin, trackMax, *on ? theme::kAccent : theme::kTrack, kTrackHeight * 0.5f);
+        c.rect(trackMin, trackMax, *on ? theme::kAccent : theme::g_track, kTrackHeight * 0.5f);
         const float knobX =
             *on ? trackMax.x - c.dp(kTrackHeight) * 0.5f : trackMin.x + c.dp(kTrackHeight) * 0.5f;
-        c.list()->AddCircleFilled({knobX, centerY}, c.dp(kKnob), theme::kTextPrimary);
+        c.list()->AddCircleFilled({knobX, centerY}, c.dp(kKnob), theme::g_textPrimary);
     }
     return frame.touch.tapped(origin, max);
 }
@@ -711,7 +711,7 @@ bool drawFeedStatus(Frame& frame, const Feed& feed, ImVec2 min, ImVec2 max, Item
         feed.error.empty() ? tr(Text::Nothing) : friendlyError(feed.error);
     const float textHeight =
         c.paragraph({center.x - width * 0.5f, center.y - c.dp(kIconTarget)}, width,
-                    theme::kBodySize, theme::kTextSecondary, message, 4);
+                    theme::kBodySize, theme::g_textSecondary, message, 4);
     if (feed.error.empty()) {
         return false;
     }

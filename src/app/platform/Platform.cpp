@@ -200,13 +200,15 @@ void Platform::setFullscreen(bool fullscreen) {
     }
 }
 
-void Platform::setLightSystemBars(bool light) {
+void Platform::setLightSystemBars(bool statusBar, bool navigationBar) {
+    constexpr jint kLightStatusBars = 1 << 3;     // APPEARANCE_LIGHT_STATUS_BARS.
+    constexpr jint kLightNavigationBars = 1 << 4; // APPEARANCE_LIGHT_NAVIGATION_BARS.
+    const jint light =
+        (statusBar ? kLightStatusBars : 0) | (navigationBar ? kLightNavigationBars : 0);
     if (light == m_lightSystemBars) {
         return;
     }
     m_lightSystemBars = light;
-    // WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS and APPEARANCE_LIGHT_NAVIGATION_BARS.
-    constexpr jint kLightBars = 1 << 3 | 1 << 4;
     const LocalFrame frame(m_env);
     jobject view = window();
     jobject controller =
@@ -216,7 +218,7 @@ void Platform::setLightSystemBars(bool light) {
         return;
     }
     m_env->CallVoidMethod(controller, method(m_env, controller, "setSystemBarsAppearance", "(II)V"),
-                          light ? kLightBars : 0, kLightBars);
+                          light, kLightStatusBars | kLightNavigationBars);
     if (m_env->ExceptionCheck()) {
         m_env->ExceptionDescribe();
         m_env->ExceptionClear();
