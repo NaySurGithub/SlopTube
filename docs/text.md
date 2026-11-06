@@ -41,10 +41,15 @@ bidirectional reordering on top of it. Glyphs are rasterised by FreeType (`imgui
 ImGui's rasteriser cannot read colour fonts (CBDT/sbix), so emoji come from Android itself. A
 custom `ImFontLoader` (`emojiLoader` in `Fonts.cpp`), merged right after Roboto, claims the
 emoji blocks (U+2300–23FF, U+2600–27BF, U+2B00–2BFF, U+1F000–1FAFF) when the system can draw
-them (`Paint.hasGlyph`). Each glyph is drawn on demand by `Platform::drawGlyph` (JNI: `Paint`,
+them (`Paint.hasGlyph`), and the private-use code points that stand for flags, always. Each glyph is drawn on demand by `Platform::drawGlyph` (JNI: `Paint`,
 `Canvas`, `Bitmap`) at the text's size, as everywhere else on the phone, then copied
 into ImGui's RGBA atlas as a coloured glyph (`ImFontGlyph::Colored`, so text colour does not
 tint it). Glyphs are baked once per size, like any other.
+
+A flag is two regional indicators shaped into one glyph, which ImGui cannot do. `Canvas` folds
+each pair into one private-use code point (`kFlagFirst`, from U+E100) before text is measured,
+cut or drawn, and `Platform::codepointString` turns it back into the pair, so that Android draws
+the flag, or the two letters of a pair that is none. Text typed in input fields is not folded.
 
 Coming before the symbol fonts, it also draws in colour the pictographs they carry (hearts,
 stars), as everywhere else on the phone. Sequence controls (zero-width joiner, variation
@@ -108,8 +113,8 @@ mostly ImGui rasterising new glyphs.
 ## Known limitations
 
 - **Emoji sequences are drawn one code point at a time.** A family (joined with U+200D) shows as
-  its members side by side, a skin tone falls back to the default yellow, and a flag shows as
-  its two regional-indicator letters.
+  its members side by side, and a skin tone falls back to the default yellow. Flags are the
+  exception (see [Colour emoji](#colour-emoji)).
 - **No Indic or Thai shaping.** Glyphs show, but Devanagari conjuncts and Thai stacked marks may
   be imperfect.
 - **Arabic vowel marks** are not positioned from font data.

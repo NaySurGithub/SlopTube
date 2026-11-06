@@ -34,6 +34,15 @@ struct Fonts {
 };
 
 // A colour emoji rasterised by the platform, top-left at the line's top.
+// A flag is one glyph made of two regional indicators, but ImGui draws one code point at a time:
+// the pair travels through it as a single private-use code point, kFlagFirst + first * 26 + second.
+// Low in the private use area: ImGui sizes each font's tables by the highest code point it draws.
+// U+E000 to U+E0FF are skipped because Roboto may hold glyphs there, and it is asked first.
+inline constexpr char32_t kRegionalIndicatorA = 0x1F1E6;
+inline constexpr char32_t kRegionalIndicators = 26;
+inline constexpr char32_t kFlagFirst = 0xE100;
+inline constexpr char32_t kFlagLast = kFlagFirst + kRegionalIndicators * kRegionalIndicators - 1;
+
 struct EmojiGlyph {
     int width = 0;
     int height = 0;

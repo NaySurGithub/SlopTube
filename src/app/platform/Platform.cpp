@@ -458,15 +458,24 @@ jobject Platform::vibrator() {
 }
 
 jstring Platform::codepointString(char32_t codepoint) {
-    std::array<jchar, 2> units{};
-    jsize length = 1;
-    if (codepoint > 0xFFFF) {
-        const char32_t offset = codepoint - 0x10000;
-        units = {static_cast<jchar>(0xD800 + (offset >> 10)),
-                 static_cast<jchar>(0xDC00 + (offset & 0x3FF))};
-        length = 2;
+    std::array<jchar, 4> units{};
+    jsize length = 0;
+    const auto append = [&](char32_t c) {
+        if (c > 0xFFFF) {
+            const char32_t offset = c - 0x10000;
+            units[static_cast<std::size_t>(length++)] = static_cast<jchar>(0xD800 + (offset >> 10));
+            units[static_cast<std::size_t>(length++)] =
+                static_cast<jchar>(0xDC00 + (offset & 0x3FF));
+        } else {
+            units[static_cast<std::size_t>(length++)] = static_cast<jchar>(c);
+        }
+    };
+    if (codepoint >= kFlagFirst && codepoint <= kFlagLast) {
+        const char32_t pair = codepoint - kFlagFirst;
+        append(kRegionalIndicatorA + pair / kRegionalIndicators);
+        append(kRegionalIndicatorA + pair % kRegionalIndicators);
     } else {
-        units[0] = static_cast<jchar>(codepoint);
+        append(codepoint);
     }
     return m_env->NewString(units.data(), length);
 }
