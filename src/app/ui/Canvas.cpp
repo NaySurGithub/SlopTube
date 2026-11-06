@@ -247,7 +247,7 @@ void Canvas::icon(Icon icon, ImVec2 c, float sizeDp, ImU32 color) const {
         break;
     case Icon::Send:
         m_list->AddTriangleFilled(p(-9, -8), p(10, 0), p(-9, 8), color);
-        m_list->AddTriangleFilled(p(-9, -8), p(-5, 0), p(-9, 8), IM_COL32_BLACK);
+        m_list->AddTriangleFilled(p(-9, -8), p(-5, 0), p(-9, 8), theme::kBackground);
         break;
     case Icon::Check:
         m_list->AddLine(p(-8, 0), p(-3, 6), color, stroke);
@@ -419,8 +419,8 @@ void Canvas::icon(Icon icon, ImVec2 c, float sizeDp, ImU32 color) const {
     case Icon::Downloaded:
         if (icon == Icon::Downloaded) {
             m_list->AddCircleFilled(p(0, -2), unit * 8, color);
-            m_list->AddLine(p(-4, -2), p(-1, 1), IM_COL32_BLACK, stroke);
-            m_list->AddLine(p(-1, 1), p(4, -5), IM_COL32_BLACK, stroke);
+            m_list->AddLine(p(-4, -2), p(-1, 1), theme::kTextOnLight, stroke);
+            m_list->AddLine(p(-1, 1), p(4, -5), theme::kTextOnLight, stroke);
         } else {
             m_list->AddLine(p(0, -9), p(0, 4), color, stroke);
             m_list->AddLine(p(-5, -1), p(0, 4), color, stroke);
@@ -433,8 +433,8 @@ void Canvas::icon(Icon icon, ImVec2 c, float sizeDp, ImU32 color) const {
         break;
     case Icon::CheckboxOn:
         m_list->AddRectFilled(p(-9, -9), p(9, 9), color, unit * 2);
-        m_list->AddLine(p(-5, 0), p(-1.5f, 4), IM_COL32_BLACK, stroke);
-        m_list->AddLine(p(-1.5f, 4), p(5.5f, -4), IM_COL32_BLACK, stroke);
+        m_list->AddLine(p(-5, 0), p(-1.5f, 4), theme::kTextOnLight, stroke);
+        m_list->AddLine(p(-1.5f, 4), p(5.5f, -4), theme::kTextOnLight, stroke);
         break;
     }
 }

@@ -10,6 +10,9 @@ inline constexpr std::array<float, 3> kInterfaceScales{1.0f, 1.15f, 1.3f};
 inline constexpr int kInterfaceSizes = static_cast<int>(kInterfaceScales.size());
 inline constexpr int kLanguageChoices = 4;
 
+// Settings::appearance: 0 follows the phone, 1 light, 2 dark.
+inline constexpr int kAppearanceChoices = 3;
+
 // Preferences of the Settings screen, kept in the data directory.
 struct Settings {
     bool backgroundPlay = true;      // Playback goes on when the app leaves the screen.
@@ -21,6 +24,7 @@ struct Settings {
     int interfaceSize = 0;
     // 0 follows the phone, 1 English, 2 French, 3 Spanish.
     int language = 0;
+    int appearance = 0; // kAppearanceChoices.
 
     // Defaults for anything missing or unreadable.
     [[nodiscard]] static Settings load(const std::filesystem::path& file);

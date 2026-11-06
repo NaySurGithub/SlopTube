@@ -93,6 +93,7 @@ void App::closeMiniPlayer() {
 }
 
 void App::drawMiniPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
+    const theme::DarkScope darkColours;
     const Canvas& c = frame.canvas;
     ImDrawList* list = c.list();
     const float margin = c.dp(kMargin);

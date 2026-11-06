@@ -35,8 +35,6 @@ constexpr std::string_view kDetailSeparator = " • ";
 constexpr float kRowTitleLines = 3;
 constexpr float kStatusWidth = 280;  // dp, width of centred status messages.
 constexpr float kRippleSpeed = 2.5f; // Ripple radius growth, in rectangle diagonals per second.
-constexpr ImU32 kRipple = IM_COL32(0xff, 0xff, 0xff, 0x24);
-constexpr ImU32 kShimmer = IM_COL32(0xff, 0xff, 0xff, 0x10);
 constexpr int kSkeletonRows = 6;
 
 struct CardMetrics {
@@ -78,7 +76,7 @@ void drawBadge(Frame& frame, std::string_view text, ImVec2 thumbnailMax) {
                      thumbnailMax.y - c.dp(theme::kBadgeMargin)};
     const ImVec2 min{max.x - extent.x - padding * 2, max.y - extent.y - padding};
     c.rect(min, max, theme::kBadge, theme::kBadgePadding);
-    label.text({min.x + padding, min.y + padding * 0.5f}, theme::kCaptionSize, theme::kTextPrimary,
+    label.text({min.x + padding, min.y + padding * 0.5f}, theme::kCaptionSize, IM_COL32_WHITE,
                text);
 }
 
@@ -371,7 +369,8 @@ void drawPressed(Frame& frame, ImVec2 min, ImVec2 max, float roundingDp) {
     c.rect(min, max, motion::withAlpha(theme::kSurfacePressed, std::min(t * 2, 1.0f) * 0.5f),
            roundingDp);
     c.list()->PushClipRect(min, max, true);
-    c.list()->AddCircleFilled(frame.touch.start(), diagonal * motion::easeOutCubic(t), kRipple);
+    c.list()->AddCircleFilled(frame.touch.start(), diagonal * motion::easeOutCubic(t),
+                              theme::kRipple);
     c.list()->PopClipRect();
     frame.animating = true;
 }
@@ -416,10 +415,11 @@ void drawSkeleton(Frame& frame, ItemStyle style, ImVec2 min, ImVec2 max) {
         static_cast<float>(std::fmod(frame.time, motion::kShimmerPeriod)) / motion::kShimmerPeriod;
     const float band = width * 0.4f;
     const float x = min.x - band + (width + band * 2) * phase;
-    list->AddRectFilledMultiColor({x - band, min.y}, {x, max.y}, IM_COL32(0, 0, 0, 0), kShimmer,
-                                  kShimmer, IM_COL32(0, 0, 0, 0));
-    list->AddRectFilledMultiColor({x, min.y}, {x + band, max.y}, kShimmer, IM_COL32(0, 0, 0, 0),
-                                  IM_COL32(0, 0, 0, 0), kShimmer);
+    const ImU32 shimmer = theme::kShimmer;
+    list->AddRectFilledMultiColor({x - band, min.y}, {x, max.y}, IM_COL32(0, 0, 0, 0), shimmer,
+                                  shimmer, IM_COL32(0, 0, 0, 0));
+    list->AddRectFilledMultiColor({x, min.y}, {x + band, max.y}, shimmer, IM_COL32(0, 0, 0, 0),
+                                  IM_COL32(0, 0, 0, 0), shimmer);
     list->PopClipRect();
     frame.animating = true;
 }

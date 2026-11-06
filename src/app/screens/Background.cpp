@@ -139,6 +139,7 @@ void App::updateAutoplay() {
 }
 
 void App::drawAutoplay(Frame& frame, ImVec2 min, ImVec2 max) {
+    const theme::DarkScope darkColours;
     if (m_watch.endedAt < 0 || !m_settings.autoplay || m_watch.autoplayCancelled) {
         return;
     }
@@ -176,6 +177,7 @@ void App::drawAutoplay(Frame& frame, ImVec2 min, ImVec2 max) {
 }
 
 void App::drawPictureInPicture(Frame& frame, ImVec2 display) {
+    const theme::DarkScope darkColours;
     const Canvas& c = frame.canvas;
     c.rect({0, 0}, display, IM_COL32_BLACK);
     m_videoSurface->draw(c.list(), {0, 0}, display);

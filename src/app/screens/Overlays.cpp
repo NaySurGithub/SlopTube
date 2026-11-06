@@ -16,7 +16,6 @@ constexpr float kDismissDrag = 96;     // dp of downward drag that closes a shee
 constexpr float kHandleWidth = 36;
 constexpr float kHandleHeight = 4;
 constexpr float kSheetHeaderHeight = 56;
-constexpr ImU32 kHandle = IM_COL32(0xff, 0xff, 0xff, 0x40);
 
 } // namespace
 
@@ -88,8 +87,8 @@ void App::drawSheet(Frame& frame, ImVec2 min, ImVec2 max) {
                             modal ? theme::kSurfaceRaised : theme::kBackground,
                             c.dp(theme::kSheetRadius), ImDrawFlags_RoundCornersTop);
     c.rect({(min.x + max.x - c.dp(kHandleWidth)) * 0.5f, min.y + c.dp(8)},
-           {(min.x + max.x + c.dp(kHandleWidth)) * 0.5f, min.y + c.dp(8 + kHandleHeight)}, kHandle,
-           kHandleHeight);
+           {(min.x + max.x + c.dp(kHandleWidth)) * 0.5f, min.y + c.dp(8 + kHandleHeight)},
+           theme::kSheetHandle, kHandleHeight);
     switch (m_sheet.kind) {
     case Sheet::Comments:
         drawCommentsSheet(frame, min, max);

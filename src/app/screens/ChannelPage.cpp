@@ -632,10 +632,10 @@ void App::drawChannelHome(Frame& frame, const std::shared_ptr<ChannelPage>& page
                     c.with(Weight::Medium)
                         .line({x + c.dp(8),
                                top + cellHeight - c.dp(8) - c.lineHeight(theme::kCaptionSize)},
-                              cell - c.dp(16), theme::kCaptionSize, theme::kTextPrimary, views);
+                              cell - c.dp(16), theme::kCaptionSize, IM_COL32_WHITE, views);
                 }
                 c.icon(Icon::MoreHorizontal, {x + cell - c.dp(14), top + c.dp(12)}, 16,
-                       theme::kTextPrimary);
+                       IM_COL32_WHITE);
                 if (!moving && frame.touch.tapped({x, top}, {x + cell, top + cellHeight})) {
                     open(index);
                 }

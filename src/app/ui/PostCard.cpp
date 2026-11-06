@@ -29,7 +29,6 @@ constexpr float kActionsHeight = 48; // dp
 constexpr float kActionGap = 8;      // dp between an action icon and its count.
 constexpr float kCounterMargin = 10; // dp, carousel page counter from the image corner.
 constexpr float kCounterPadding = 8; // dp
-constexpr ImU32 kChoiceBorder = theme::kSurfacePressed;
 constexpr std::string_view kSeparator = " • ";
 
 // Vertical positions inside a card, relative to its top.
@@ -144,7 +143,7 @@ void drawCarousel(Frame& frame, PostCard& card, ImVec2 min, float width, const L
         const ImVec2 pillMin{pillMax.x - extent.x - padding * 2, min.y + c.dp(kCounterMargin)};
         c.rect(pillMin, pillMax, theme::kBadge, theme::kPillRadius);
         c.text({pillMin.x + padding, pillMin.y + padding * 0.25f}, theme::kCaptionSize,
-               theme::kTextPrimary, counter);
+               IM_COL32_WHITE, counter);
     }
     c.list()->PopClipRect();
 }
@@ -154,7 +153,7 @@ void drawChoices(const Canvas& c, const innertube::Post& post, ImVec2 min, float
     const float height = c.dp(kChoiceHeight);
     float y = min.y;
     for (const auto& choice : post.choices) {
-        c.list()->AddRect({min.x, y}, {min.x + width, y + height}, kChoiceBorder,
+        c.list()->AddRect({min.x, y}, {min.x + width, y + height}, theme::kSurfacePressed,
                           c.dp(kChoiceRadius), c.dp(kBorder));
         c.line({min.x + padding, y + (height - c.lineHeight(theme::kBodySize)) * 0.5f},
                width - padding * 2, theme::kBodySize, theme::kTextPrimary, choice);

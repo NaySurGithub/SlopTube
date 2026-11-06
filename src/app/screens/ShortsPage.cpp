@@ -217,7 +217,7 @@ void App::drawShortsShelf(Frame& frame, ImVec2 origin, float width, std::size_t 
         const float titleHeight = c.lineHeight(theme::kBodySize) * 2;
         c.with(theme::kTitleWeight)
             .paragraph({x + inset, max.y - inset - titleHeight}, tile - inset * 2, theme::kBodySize,
-                       theme::kTextPrimary, item.title, 2);
+                       IM_COL32_WHITE, item.title, 2);
         // Hit box clamped to the list so tiles scrolled under the bars leave them their taps.
         const ImVec2 clipMin = c.list()->GetClipRectMin();
         const ImVec2 clipMax = c.list()->GetClipRectMax();
@@ -228,6 +228,7 @@ void App::drawShortsShelf(Frame& frame, ImVec2 origin, float width, std::size_t 
 }
 
 void App::drawShorts(Frame& frame, ImVec2 min, ImVec2 max) {
+    const theme::DarkScope darkColours;
     const Canvas& c = frame.canvas;
     const auto& feed = m_tabFeeds[std::to_underlying(Tab::Shorts)];
     c.rect(min, max, IM_COL32_BLACK);
@@ -342,6 +343,7 @@ void App::drawShorts(Frame& frame, ImVec2 min, ImVec2 max) {
 }
 
 void App::drawLikeBurst(Frame& frame) {
+    const theme::DarkScope darkColours;
     const float elapsed = static_cast<float>(frame.time - m_shorts.burstAt);
     if (m_shorts.burstAt < 0 || elapsed > kBurstDuration) {
         m_shorts.burstAt = -1;

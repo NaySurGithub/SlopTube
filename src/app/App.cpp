@@ -142,6 +142,15 @@ constexpr float kAccountsPillPadding = 14; // dp inside "Accounts".
 constexpr float kAccountsPillExtra = 50;   // dp of "Accounts" besides its label (chevron).
 constexpr float kChipRadius = 8;           // dp
 
+// The input fields' colours, which ImGui draws by itself.
+void applyStyleColors(ImGuiStyle& style) {
+    style.Colors[ImGuiCol_FrameBg] = ImGui::ColorConvertU32ToFloat4(theme::kSurface);
+    style.Colors[ImGuiCol_FrameBgHovered] = style.Colors[ImGuiCol_FrameBg];
+    style.Colors[ImGuiCol_FrameBgActive] = style.Colors[ImGuiCol_FrameBg];
+    style.Colors[ImGuiCol_Text] = ImGui::ColorConvertU32ToFloat4(theme::kTextPrimary);
+    style.Colors[ImGuiCol_TextDisabled] = ImGui::ColorConvertU32ToFloat4(theme::kTextSecondary);
+}
+
 } // namespace
 
 App::App(android_app* native)
@@ -170,6 +179,7 @@ App::App(android_app* native)
     // The interface size (Settings, and Android's text size) sets the density everything uses.
     m_settings = Settings::load(m_platform.dataDirectory() / kSettingsFile);
     setLanguage(languageForChoice(m_settings.language, m_platform.locale().language));
+    applyAppearance();
     applyScale();
     // Glyphs are rasterised on demand at any size, so the fonts follow later scale changes.
     m_fonts = loadFonts(*io.Fonts, theme::kTitleSize * m_density, m_platform.locale().language,
@@ -243,11 +253,7 @@ void App::applyScale() {
     style.FontSizeBase = theme::kTitleSize * m_density;
     style.FrameRounding = theme::kPillRadius * m_density;
     style.FramePadding = {theme::kGutter * m_density, theme::kGutter * 0.5f * m_density};
-    style.Colors[ImGuiCol_FrameBg] = ImGui::ColorConvertU32ToFloat4(theme::kSurface);
-    style.Colors[ImGuiCol_FrameBgHovered] = style.Colors[ImGuiCol_FrameBg];
-    style.Colors[ImGuiCol_FrameBgActive] = style.Colors[ImGuiCol_FrameBg];
-    style.Colors[ImGuiCol_Text] = ImGui::ColorConvertU32ToFloat4(theme::kTextPrimary);
-    style.Colors[ImGuiCol_TextDisabled] = ImGui::ColorConvertU32ToFloat4(theme::kTextSecondary);
+    applyStyleColors(style);
     style.Colors[ImGuiCol_NavCursor] = {0, 0, 0, 0};
     // The navigation icons are rasterised at their exact pixel size.
     m_icons =
@@ -268,6 +274,14 @@ void App::onWindowDestroyed() {
     m_player.setVideoHidden(true);
     ImGui_ImplAndroid_Shutdown();
     m_display.detach();
+}
+
+void App::applyAppearance() {
+    constexpr int kFollowPhone = 0;
+    constexpr int kDark = 2;
+    theme::apply(m_settings.appearance == kFollowPhone ? m_platform.darkMode()
+                                                       : m_settings.appearance == kDark);
+    applyStyleColors(ImGui::GetStyle());
 }
 
 void App::onInsetsChanged() {
@@ -536,6 +550,7 @@ std::size_t App::chapterAt(std::int64_t timeMs) const {
 
 void App::drawScrubPreview(Frame& frame, ImVec2 min, ImVec2 max, std::int64_t timeMs, float barY,
                            std::string_view label) {
+    const theme::DarkScope darkColours;
     const Canvas& c = frame.canvas;
     // The largest frames: they are stretched over the whole player.
     auto preview = innertube::storyboardFrame(m_watch.storyboard, std::numeric_limits<int>::max(),
@@ -592,6 +607,7 @@ void App::drawScrubPreview(Frame& frame, ImVec2 min, ImVec2 max, std::int64_t ti
 }
 
 void App::drawFineSeek(Frame& frame, ImVec2 min, ImVec2 max) {
+    const theme::DarkScope darkColours;
     const Canvas& c = frame.canvas;
     ImDrawList* list = c.list();
     const std::int64_t durationMs = m_player.durationUs() / 1000;
@@ -972,6 +988,10 @@ void App::drawInterface(Frame& frame, ImVec2 min, ImVec2 max, ImVec2 display) {
     // Modal sheets are drawn first on a top layer so they get input before the screen beneath,
     // which only sees touches that started outside them.
     ImDrawList* list = frame.canvas.list();
+    // Both keep black behind the status bar, so its icons stay light there.
+    const bool overVideo =
+        m_stack.empty() ? m_tab == Tab::Shorts : m_stack.back().route == Route::Watch;
+    m_platform.setLightSystemBars(!theme::isDark && !overVideo);
     const bool modal = m_sheet.modal();
     if (modal) {
         list->ChannelsSplit(2);
@@ -1511,6 +1531,7 @@ void App::drawWatch(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
 }
 
 void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
+    const theme::DarkScope darkColours;
     constexpr float kButtonInset = 28; // dp from the player's edges to corner button centres.
     const Canvas& c = frame.canvas;
     ImDrawList* list = c.list();
@@ -1851,6 +1872,7 @@ bool App::holdForSpeed(Frame& frame, ImVec2 min, ImVec2 max, float pillTop) {
 
 void App::drawPill(const Canvas& c, float centreX, float top, std::string_view label,
                    std::optional<Icon> icon) {
+    const theme::DarkScope darkColours;
     constexpr float kIcon = 16;   // dp
     constexpr float kHeight = 32; // dp
     const float gap = c.dp(4);
@@ -1923,6 +1945,7 @@ void App::drawZoomableVideo(Frame& frame, ImVec2 min, ImVec2 max) {
 }
 
 void App::drawPlayerMenu(Frame& frame, ImVec2 min, ImVec2 max) {
+    const theme::DarkScope darkColours;
     std::vector<MenuRow> rows;
     switch (m_watch.menu) {
     case PlayerMenu::None:

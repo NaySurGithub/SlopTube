@@ -41,9 +41,11 @@ void handleCommandUnguarded(android_app* native, std::int32_t command) {
     case APP_CMD_TERM_WINDOW:
         app->onWindowDestroyed();
         break;
+    case APP_CMD_CONFIG_CHANGED:
+        app->applyAppearance(); // The phone may have changed to or from its dark mode.
+        [[fallthrough]];
     case APP_CMD_WINDOW_RESIZED:
     case APP_CMD_CONTENT_RECT_CHANGED:
-    case APP_CMD_CONFIG_CHANGED:
         app->onInsetsChanged();
         host.insetsSettleUntil = Clock::now() + kInsetsSettleTime;
         break;

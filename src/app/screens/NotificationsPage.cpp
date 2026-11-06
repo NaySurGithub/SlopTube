@@ -135,7 +135,7 @@ void App::drawUnreadBadge(const Canvas& c, ImVec2 bell, int count) {
     c.rect(min, max, theme::kBadgeRed, kBadgeHeight * 0.5f);
     medium.text({(min.x + max.x - medium.measure(kBadgeTextSize, text).x) * 0.5f,
                  (min.y + max.y - c.lineHeight(kBadgeTextSize)) * 0.5f},
-                kBadgeTextSize, theme::kTextPrimary, text);
+                kBadgeTextSize, IM_COL32_WHITE, text);
 }
 
 void App::openNotifications() {

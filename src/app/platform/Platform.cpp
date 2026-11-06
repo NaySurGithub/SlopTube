@@ -200,6 +200,29 @@ void Platform::setFullscreen(bool fullscreen) {
     }
 }
 
+void Platform::setLightSystemBars(bool light) {
+    if (light == m_lightSystemBars) {
+        return;
+    }
+    m_lightSystemBars = light;
+    // WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS and APPEARANCE_LIGHT_NAVIGATION_BARS.
+    constexpr jint kLightBars = 1 << 3 | 1 << 4;
+    const LocalFrame frame(m_env);
+    jobject view = window();
+    jobject controller =
+        m_env->CallObjectMethod(view, method(m_env, view, "getInsetsController",
+                                             "()Landroid/view/WindowInsetsController;"));
+    if (controller == nullptr) {
+        return;
+    }
+    m_env->CallVoidMethod(controller, method(m_env, controller, "setSystemBarsAppearance", "(II)V"),
+                          light ? kLightBars : 0, kLightBars);
+    if (m_env->ExceptionCheck()) {
+        m_env->ExceptionDescribe();
+        m_env->ExceptionClear();
+    }
+}
+
 void Platform::haptic(Haptic haptic) {
     const LocalFrame frame(m_env);
     if (haptic == Haptic::LongPress || haptic == Haptic::ContextClick) {
@@ -392,6 +415,10 @@ innertube::Locale Platform::locale() const {
         locale.region.assign(country.data(), country.size());
     }
     return locale;
+}
+
+bool Platform::darkMode() const {
+    return AConfiguration_getUiModeNight(m_app->config) == ACONFIGURATION_UI_MODE_NIGHT_YES;
 }
 
 float Platform::density() const {

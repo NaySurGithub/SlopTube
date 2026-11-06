@@ -32,11 +32,11 @@ constexpr float kLabelCenter = 37;   // dp
 constexpr float kCreateSize = 36;    // dp, diameter of the create button.
 constexpr float kAvatarRing = 1.5f;  // dp, ring around the account photo when "You" is selected.
 constexpr float kRingGap = 1.5f;     // dp between the photo and its ring.
-constexpr ImU32 kCreateFill = IM_COL32(0x26, 0x26, 0x26, 0xff);
 
 } // namespace
 
 void App::drawNavigationBar(Frame& frame, ImVec2 origin, float width) {
+    const theme::DarkScope shortsColours(m_tab == Tab::Shorts && m_stack.empty());
     const Canvas& c = frame.canvas;
     const float height = c.dp(theme::kBottomBarHeight);
     const ImVec2 max{origin.x + width, origin.y + height + m_insets.bottom};
@@ -57,7 +57,7 @@ void App::drawNavigationBar(Frame& frame, ImVec2 origin, float width) {
             const float radius = c.dp(kCreateSize) * 0.5f;
             const bool pressed = frame.touch.pressed(slotMin, slotMax);
             c.list()->AddCircleFilled(center, radius,
-                                      pressed ? theme::kSurfacePressed : kCreateFill);
+                                      pressed ? theme::kSurfacePressed : theme::kSurface);
             m_icons->draw(c.list(), Glyph::Create, center, theme::kTextPrimary);
             if (frame.touch.tapped(slotMin, slotMax)) {
                 later([this] { showToast(tr(Text::CreateUnavailable)); });
