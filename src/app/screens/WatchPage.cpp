@@ -86,7 +86,7 @@ float App::drawWatchHeader(Frame& frame, ImVec2 origin, float width) {
     const float top = origin.y;
     y += c.with(theme::kHeadingWeight)
              .paragraph({origin.x + gutter, y}, textWidth, theme::kWatchTitleSize,
-                        theme::kTextPrimary, title, 2);
+                        theme::g_textPrimary, title, 2);
     y += c.dp(kMetaTop);
     {
         const float right = origin.x + width - gutter;
@@ -104,19 +104,19 @@ float App::drawWatchHeader(Frame& frame, ImVec2 origin, float width) {
             x += segmentWidth + spacing;
         };
         if (!m_watch.error.empty()) {
-            c.line({x, y}, textWidth, theme::kCaptionSize, theme::kTextSecondary,
+            c.line({x, y}, textWidth, theme::kCaptionSize, theme::g_textSecondary,
                    friendlyError(m_watch.error));
         } else if (info) {
-            segment(medium, theme::kTextPrimary, info->channel.handle);
+            segment(medium, theme::g_textPrimary, info->channel.handle);
             if (info->likesAllowed && !info->likes.empty()) {
-                segment(c, theme::kTextSecondary,
+                segment(c, theme::g_textSecondary,
                         info->likes + ' ' + std::string(tr(Text::LikesSuffix)));
             }
-            segment(c, theme::kTextSecondary, info->views);
-            segment(c, theme::kTextSecondary, info->date);
-            medium.text({x, y}, theme::kCaptionSize, theme::kTextPrimary, more);
+            segment(c, theme::g_textSecondary, info->views);
+            segment(c, theme::g_textSecondary, info->date);
+            medium.text({x, y}, theme::kCaptionSize, theme::g_textPrimary, more);
         } else {
-            c.line({x, y}, textWidth, theme::kCaptionSize, theme::kTextSecondary,
+            c.line({x, y}, textWidth, theme::kCaptionSize, theme::g_textSecondary,
                    m_watch.item.detail);
         }
     }
@@ -151,11 +151,12 @@ float App::drawWatchHeader(Frame& frame, ImVec2 origin, float width) {
             if (owner.subscribed) {
                 const ImVec2 pillMin{pillX, y};
                 const ImVec2 pillMax{pillX + c.dp(kBellPillWidth), y + height};
-                c.rect(pillMin, pillMax, theme::kSurface, kActionsHeight * 0.5f);
+                c.rect(pillMin, pillMax, theme::g_surface, kActionsHeight * 0.5f);
                 drawPressed(frame, pillMin, pillMax, kActionsHeight * 0.5f);
-                c.icon(Icon::Bell, {pillX + c.dp(kBellX), centerY}, kBellIcon, theme::kTextPrimary);
+                c.icon(Icon::Bell, {pillX + c.dp(kBellX), centerY}, kBellIcon,
+                       theme::g_textPrimary);
                 c.icon(Icon::ChevronDown, {pillX + c.dp(kBellChevronX), centerY}, kChevronIcon,
-                       theme::kTextPrimary);
+                       theme::g_textPrimary);
                 if (frame.touch.tapped(pillMin, pillMax)) {
                     toggleSubscription(owner);
                 }
@@ -175,7 +176,7 @@ float App::drawWatchHeader(Frame& frame, ImVec2 origin, float width) {
             x -= c.dp(kActionsSpacing);
             {
                 motion::Layer layer(c.list());
-                c.icon(icon, center, theme::kIconSize, theme::kTextPrimary);
+                c.icon(icon, center, theme::kIconSize, theme::g_textPrimary);
                 const float scale =
                     pop && m_watch.likePopAt >= 0
                         ? kPopFrom + (1 - kPopFrom) *
@@ -218,19 +219,19 @@ float App::drawWatchHeader(Frame& frame, ImVec2 origin, float width) {
         const ImVec2 cardMax{origin.x + width - gutter, y + padding * 2.5f +
                                                             c.lineHeight(theme::kBodySize) +
                                                             c.lineHeight(theme::kCaptionSize)};
-        c.rect(cardMin, cardMax, theme::kSurface, theme::kCardRadius);
+        c.rect(cardMin, cardMax, theme::g_surface, theme::kCardRadius);
         drawPressed(frame, cardMin, cardMax, theme::kCardRadius);
-        medium.text({cardMin.x + padding, y + padding}, theme::kBodySize, theme::kTextPrimary,
+        medium.text({cardMin.x + padding, y + padding}, theme::kBodySize, theme::g_textPrimary,
                     tr(Text::LiveChat));
         const float lineY = y + padding * 1.5f + c.lineHeight(theme::kBodySize);
         const auto& chat = m_watch.chat;
         if (chat && !chat->messages.empty()) {
             const auto& newest = chat->messages.back();
             c.line({cardMin.x + padding, lineY}, cardMax.x - cardMin.x - padding * 2,
-                   theme::kCaptionSize, theme::kTextSecondary, newest.author + "  " + newest.text);
+                   theme::kCaptionSize, theme::g_textSecondary, newest.author + "  " + newest.text);
         } else {
             c.rect({cardMin.x + padding, lineY}, {cardMax.x - padding * 4, lineY + c.dp(10)},
-                   theme::kPlaceholder, 4);
+                   theme::g_placeholder, 4);
         }
         if (frame.touch.tapped(cardMin, cardMax)) {
             later([this] { openLiveChat(); });
@@ -243,15 +244,15 @@ float App::drawWatchHeader(Frame& frame, ImVec2 origin, float width) {
         const float preview = c.lineHeight(kTeaserTextSize) * 2;
         const ImVec2 cardMin{origin.x + gutter, y};
         const ImVec2 cardMax{origin.x + width - gutter, y + c.dp(kTeaserHeight)};
-        c.rect(cardMin, cardMax, theme::kSurface, theme::kCardRadius);
+        c.rect(cardMin, cardMax, theme::g_surface, theme::kCardRadius);
         drawPressed(frame, cardMin, cardMax, theme::kCardRadius);
         float cy = y + c.dp(kTeaserTitleTop);
-        medium.text({cardMin.x + padding, cy}, theme::kBodySize, theme::kTextPrimary,
+        medium.text({cardMin.x + padding, cy}, theme::kBodySize, theme::g_textPrimary,
                     tr(Text::Comments));
         c.text({cardMin.x + padding + medium.measure(theme::kBodySize, tr(Text::Comments)).x +
                     gutter * 0.6f,
                 cy},
-               theme::kBodySize, theme::kTextSecondary, info->commentCount);
+               theme::kBodySize, theme::g_textSecondary, info->commentCount);
         cy += c.lineHeight(theme::kBodySize) + c.dp(kTeaserTextGap);
         const auto& comments = m_watch.comments;
         if (comments && !comments->comments.empty()) {
@@ -261,10 +262,10 @@ float App::drawWatchHeader(Frame& frame, ImVec2 origin, float width) {
                        {avatarX + avatar * 0.5f, cy + preview * 0.5f}, kTeaserAvatar);
             const float textX = avatarX + avatar + c.dp(kTeaserTextX);
             c.paragraph({textX, cy}, cardMax.x - padding - textX, kTeaserTextSize,
-                        theme::kTextPrimary, first.text, 2);
+                        theme::g_textPrimary, first.text, 2);
         } else if (comments && comments->loading) {
             c.rect({cardMin.x + padding, cy}, {cardMax.x - padding * 4, cy + c.dp(10)},
-                   theme::kPlaceholder, 4);
+                   theme::g_placeholder, 4);
         }
         if (frame.touch.tapped(cardMin, cardMax)) {
             openSheet(Sheet::Comments);
@@ -296,10 +297,10 @@ void App::drawChannelRow(Frame& frame, innertube::ChannelSummary& channel, ImVec
     const float textX = origin.x + gutter * 2 + avatar;
     const float textWidth = rowMax.x - textX;
     const float lines = c.lineHeight(theme::kBodySize) + c.lineHeight(theme::kCaptionSize);
-    medium.line({textX, centerY - lines * 0.5f}, textWidth, theme::kBodySize, theme::kTextPrimary,
+    medium.line({textX, centerY - lines * 0.5f}, textWidth, theme::kBodySize, theme::g_textPrimary,
                 channel.name);
     c.line({textX, centerY - lines * 0.5f + c.lineHeight(theme::kBodySize)}, textWidth,
-           theme::kCaptionSize, theme::kTextSecondary, channel.subscribers);
+           theme::kCaptionSize, theme::g_textSecondary, channel.subscribers);
     if (!channel.id.empty() && frame.touch.tapped(origin, rowMax)) {
         later([this, id = channel.id, name = channel.name] { openChannel(id, name); });
     }
@@ -535,9 +536,9 @@ bool App::drawCommentInput(Frame& frame, ImVec2 origin, float width, std::string
     if (!m_session.signedIn()) {
         const ImVec2 fieldMin{fieldX, centerY - fieldHeight * 0.5f};
         const ImVec2 fieldMax{origin.x + width - gutter, centerY + fieldHeight * 0.5f};
-        c.rect(fieldMin, fieldMax, theme::kSurface, theme::kPillRadius);
+        c.rect(fieldMin, fieldMax, theme::g_surface, theme::kPillRadius);
         c.text({fieldMin.x + gutter, centerY - c.lineHeight(theme::kBodySize) * 0.5f},
-               theme::kBodySize, theme::kTextSecondary, hint);
+               theme::kBodySize, theme::g_textSecondary, hint);
         if (frame.touch.tapped(fieldMin, fieldMax)) {
             showToast(tr(Text::SignInToAct));
         }
@@ -552,7 +553,7 @@ bool App::drawCommentInput(Frame& frame, ImVec2 origin, float width, std::string
                                               m_draft.size(), ImGuiInputTextFlags_EnterReturnsTrue);
     ImGui::PopFont();
     if (hasText && iconButton(frame, Icon::Send, {origin.x + width - gutter - send * 0.5f, centerY},
-                              theme::kLink)) {
+                              theme::g_link)) {
         submitted = true;
     }
     return submitted;
@@ -573,20 +574,20 @@ float App::drawComment(Frame& frame, const std::shared_ptr<CommentList>& list, s
                {origin.x + gutter + avatar * 0.5f, y + avatar * 0.5f}, theme::kSmallAvatarSize);
     const float textX = origin.x + gutter * 2 + avatar;
     const float textWidth = origin.x + width - gutter - textX;
-    c.line({textX, y}, textWidth, theme::kCaptionSize, theme::kTextSecondary,
+    c.line({textX, y}, textWidth, theme::kCaptionSize, theme::g_textSecondary,
            comment.author + std::string(kBullet) + comment.published);
     y += c.lineHeight(theme::kCaptionSize) + c.dp(2);
 
     const bool expanded = list->expanded[index];
     const int maxLines = expanded ? kExpandedCommentLines : kCollapsedCommentLines;
     const float bodyTop = y;
-    const float body = c.paragraph({textX, y}, textWidth, theme::kBodySize, theme::kTextPrimary,
+    const float body = c.paragraph({textX, y}, textWidth, theme::kBodySize, theme::g_textPrimary,
                                    comment.text, maxLines);
     y += body;
     const bool truncated =
         !expanded && body >= c.lineHeight(theme::kBodySize) * kCollapsedCommentLines - 1;
     if (truncated) {
-        c.text({textX, y}, theme::kBodySize, theme::kTextSecondary, tr(Text::ReadMore));
+        c.text({textX, y}, theme::kBodySize, theme::g_textSecondary, tr(Text::ReadMore));
         y += c.lineHeight(theme::kBodySize);
     }
     if ((truncated || expanded) &&
@@ -603,10 +604,10 @@ float App::drawComment(Frame& frame, const std::shared_ptr<CommentList>& list, s
     float x = textX - c.dp(8);
     const ImVec2 likeMin{x, y};
     c.icon(liked ? Icon::ThumbUpFilled : Icon::ThumbUp,
-           {x + c.dp(kActionIcon) * 0.5f + c.dp(8), centerY}, kActionIcon, theme::kTextPrimary);
+           {x + c.dp(kActionIcon) * 0.5f + c.dp(8), centerY}, kActionIcon, theme::g_textPrimary);
     x += c.dp(kActionIcon) + c.dp(14);
     c.text({x, centerY - c.lineHeight(theme::kCaptionSize) * 0.5f}, theme::kCaptionSize,
-           theme::kTextSecondary, comment.likes);
+           theme::g_textSecondary, comment.likes);
     x += c.measure(theme::kCaptionSize, comment.likes).x + c.dp(8);
     if (tappedWithin(frame, likeMin, {x, y + actions}, clipMin, clipMax)) {
         later([this, list, index, rating = toggled(comment.rating, Rating::Like)] {
@@ -615,7 +616,7 @@ float App::drawComment(Frame& frame, const std::shared_ptr<CommentList>& list, s
     }
     const ImVec2 dislikeMin{x, y};
     c.icon(disliked ? Icon::ThumbDownFilled : Icon::ThumbDown, {x + slot * 0.5f, centerY},
-           kActionIcon, theme::kTextPrimary);
+           kActionIcon, theme::g_textPrimary);
     x += slot;
     if (tappedWithin(frame, dislikeMin, {x, y + actions}, clipMin, clipMax)) {
         later([this, list, index, rating = toggled(comment.rating, Rating::Dislike)] {
@@ -623,7 +624,7 @@ float App::drawComment(Frame& frame, const std::shared_ptr<CommentList>& list, s
         });
     }
     const ImVec2 replyMin{x, y};
-    c.icon(Icon::Comment, {x + slot * 0.5f, centerY}, kActionIcon, theme::kTextPrimary);
+    c.icon(Icon::Comment, {x + slot * 0.5f, centerY}, kActionIcon, theme::g_textPrimary);
     x += slot;
     const bool canReply = !comment.id.starts_with(kLocalCommentPrefix);
     if (canReply && tappedWithin(frame, replyMin, {x, y + actions}, clipMin, clipMax)) {
@@ -643,10 +644,10 @@ float App::drawComment(Frame& frame, const std::shared_ptr<CommentList>& list, s
     if (allowReplies && comment.replyCount > 0) {
         const std::string label = replyLabel(comment.replyCount);
         const float labelWidth = medium.measure(theme::kBodySize, label).x;
-        medium.text({textX, y + c.dp(6)}, theme::kBodySize, theme::kTextPrimary, label);
+        medium.text({textX, y + c.dp(6)}, theme::kBodySize, theme::g_textPrimary, label);
         c.icon(Icon::ChevronRight,
                {textX + labelWidth + c.dp(10), y + c.dp(6) + c.lineHeight(theme::kBodySize) * 0.5f},
-               14, theme::kLink);
+               14, theme::g_link);
         const float rowBottom = y + c.dp(kActionHeight);
         if (tappedWithin(frame, {textX - c.dp(8), y}, {textX + labelWidth + c.dp(24), rowBottom},
                          clipMin, clipMax)) {
@@ -691,11 +692,11 @@ void App::drawCommentList(Frame& frame, const std::shared_ptr<CommentList>& list
         const std::string_view message =
             !list->error.empty() ? friendlyError(list->error) : tr(Text::Nothing);
         c.paragraph({min.x + c.dp(theme::kGutter), y + c.dp(24)}, width - c.dp(theme::kGutter) * 2,
-                    theme::kBodySize, theme::kTextSecondary, message, 3, TextAlign::Center);
+                    theme::kBodySize, theme::g_textSecondary, message, 3, TextAlign::Center);
     }
     if (more && y < max.y) {
         c.spinner({min.x + width * 0.5f, y + footer * 0.5f}, theme::kSpinnerSize,
-                  theme::kTextSecondary, frame.time);
+                  theme::g_textSecondary, frame.time);
         frame.animating = true;
     }
     c.list()->PopClipRect();
@@ -731,7 +732,7 @@ void App::drawCommentsSheet(Frame& frame, ImVec2 min, ImVec2 max) {
                          tr(replies ? Text::AddReply : Text::AddComment))) {
         later([this] { submitComment(); });
     }
-    c.list()->AddLine({min.x, listTop - c.dp(1)}, {max.x, listTop - c.dp(1)}, theme::kDivider);
+    c.list()->AddLine({min.x, listTop - c.dp(1)}, {max.x, listTop - c.dp(1)}, theme::g_divider);
     // Rows clamp their hit boxes to the list's clip rectangle, so the header keeps its taps.
     drawCommentList(frame, list, {min.x, listTop}, max, !replies);
 
@@ -739,7 +740,7 @@ void App::drawCommentsSheet(Frame& frame, ImVec2 min, ImVec2 max) {
     const float centerY = headerTop + row * 0.5f;
     float titleX = min.x + gutter * 1.5f;
     if (replies) {
-        if (iconButton(frame, Icon::Back, {min.x + row * 0.5f, centerY}, theme::kTextPrimary)) {
+        if (iconButton(frame, Icon::Back, {min.x + row * 0.5f, centerY}, theme::g_textPrimary)) {
             later([this] {
                 m_watch.replies.reset();
                 m_watch.replyParent.reset();
@@ -750,13 +751,13 @@ void App::drawCommentsSheet(Frame& frame, ImVec2 min, ImVec2 max) {
     const std::string_view title = tr(replies ? Text::Replies : Text::Comments);
     const Canvas heading = c.with(theme::kHeadingWeight);
     heading.text({titleX, centerY - c.lineHeight(theme::kSheetTitleSize) * 0.5f},
-                 theme::kSheetTitleSize, theme::kTextPrimary, title);
+                 theme::kSheetTitleSize, theme::g_textPrimary, title);
     if (!replies) {
         c.text({titleX + heading.measure(theme::kSheetTitleSize, title).x + gutter,
                 centerY - c.lineHeight(theme::kBodySize) * 0.5f},
-               theme::kBodySize, theme::kTextSecondary, info.commentCount);
+               theme::kBodySize, theme::g_textSecondary, info.commentCount);
     }
-    if (iconButton(frame, Icon::Close, {max.x - row * 0.5f, centerY}, theme::kTextPrimary)) {
+    if (iconButton(frame, Icon::Close, {max.x - row * 0.5f, centerY}, theme::g_textPrimary)) {
         later([this] { closeSheet(); });
     }
 
@@ -800,7 +801,7 @@ void App::drawDescriptionSheet(Frame& frame, ImVec2 min, ImVec2 max) {
     float y = top;
     const Canvas heading = c.with(theme::kHeadingWeight);
     y += heading.paragraph({min.x + gutter, y}, width - gutter * 2, theme::kWatchTitleSize,
-                           theme::kTextPrimary, info.title, 4);
+                           theme::g_textPrimary, info.title, 4);
     y += gutter * 1.5f;
 
     // Factoids: likes, views and date side by side, as large figures with small labels.
@@ -812,20 +813,20 @@ void App::drawDescriptionSheet(Frame& frame, ImVec2 min, ImVec2 max) {
     const float column = (width - gutter * 2) / static_cast<float>(facts.size());
     for (std::size_t i = 0; i < facts.size(); ++i) {
         const float x = min.x + gutter + column * static_cast<float>(i);
-        medium.paragraph({x, y}, column - gutter, theme::kTitleSize, theme::kTextPrimary,
+        medium.paragraph({x, y}, column - gutter, theme::kTitleSize, theme::g_textPrimary,
                          facts[i].first, 2, TextAlign::Center);
         c.line({x, y + c.lineHeight(theme::kTitleSize) * 2}, column - gutter, theme::kCaptionSize,
-               theme::kTextSecondary, facts[i].second, TextAlign::Center);
+               theme::g_textSecondary, facts[i].second, TextAlign::Center);
     }
     y += c.lineHeight(theme::kTitleSize) * 2 + c.lineHeight(theme::kCaptionSize) + gutter;
-    c.rect({min.x + gutter, y}, {max.x - gutter, y + c.dp(1)}, theme::kDivider);
+    c.rect({min.x + gutter, y}, {max.x - gutter, y + c.dp(1)}, theme::g_divider);
     y += gutter;
 
     const std::string& description =
         !info.description.empty() ? info.description
                                   : (m_watch.details ? m_watch.details->description : info.title);
-    y += c.paragraph({min.x + gutter, y}, width - gutter * 2, theme::kBodySize, theme::kTextPrimary,
-                     description, kDescriptionLines);
+    y += c.paragraph({min.x + gutter, y}, width - gutter * 2, theme::kBodySize,
+                     theme::g_textPrimary, description, kDescriptionLines);
     y += gutter;
     drawChannelRow(frame, info.channel, {min.x, y}, width);
     y += c.dp(kChannelRowHeight) + gutter * 2;
@@ -834,8 +835,8 @@ void App::drawDescriptionSheet(Frame& frame, ImVec2 min, ImVec2 max) {
 
     const float centerY = headerTop + row * 0.5f;
     heading.text({min.x + gutter * 1.5f, centerY - c.lineHeight(theme::kSheetTitleSize) * 0.5f},
-                 theme::kSheetTitleSize, theme::kTextPrimary, tr(Text::Description));
-    if (iconButton(frame, Icon::Close, {max.x - row * 0.5f, centerY}, theme::kTextPrimary)) {
+                 theme::kSheetTitleSize, theme::g_textPrimary, tr(Text::Description));
+    if (iconButton(frame, Icon::Close, {max.x - row * 0.5f, centerY}, theme::g_textPrimary)) {
         later([this] { closeSheet(); });
     }
 }

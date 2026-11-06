@@ -121,14 +121,14 @@ void App::drawUpdateSheet(Frame& frame, ImVec2 min, ImVec2 max) {
 
     float y = min.y + c.dp(kSheetTop);
     c.with(theme::kHeadingWeight)
-        .text({left, y}, theme::kSheetTitleSize, theme::kTextPrimary, tr(Text::UpdateAvailable));
+        .text({left, y}, theme::kSheetTitleSize, theme::g_textPrimary, tr(Text::UpdateAvailable));
     y += c.lineHeight(theme::kSheetTitleSize) + gutter;
 
     const std::string_view current = build::kVersion;
     const std::string intro =
         std::vformat(tr(Text::UpdateIntro), std::make_format_args(release.version, current));
-    y += c.paragraph({left, y}, width, theme::kBodySize, theme::kTextPrimary, intro, 2) + gutter;
-    c.paragraph({left, y}, width, theme::kCaptionSize, theme::kTextSecondary,
+    y += c.paragraph({left, y}, width, theme::kBodySize, theme::g_textPrimary, intro, 2) + gutter;
+    c.paragraph({left, y}, width, theme::kCaptionSize, theme::g_textSecondary,
                 plainNotes(release.notes), kNotesLines);
     y += c.lineHeight(theme::kCaptionSize) * kNotesLines + gutter * 2;
 
@@ -138,7 +138,7 @@ void App::drawUpdateSheet(Frame& frame, ImVec2 min, ImVec2 max) {
         const std::int64_t percent =
             release.size > 0 ? m_update.received->load() * 100 / release.size : 0;
         status = std::vformat(tr(Text::UpdateDownloading), std::make_format_args(percent));
-        c.rect({left, y}, {left + width, y + c.dp(kProgressHeight)}, theme::kTrack,
+        c.rect({left, y}, {left + width, y + c.dp(kProgressHeight)}, theme::g_track,
                kProgressHeight * 0.5f);
         c.rect({left, y},
                {left + width * static_cast<float>(percent) / 100.0f, y + c.dp(kProgressHeight)},
@@ -151,7 +151,7 @@ void App::drawUpdateSheet(Frame& frame, ImVec2 min, ImVec2 max) {
     }
     if (!status.empty()) {
         c.line({left, y - c.lineHeight(theme::kCaptionSize) - c.dp(4)}, width, theme::kCaptionSize,
-               m_update.error.empty() ? theme::kTextSecondary : theme::kAccent, status);
+               m_update.error.empty() ? theme::g_textSecondary : theme::kAccent, status);
     }
     y += c.dp(kProgressHeight) + gutter;
 

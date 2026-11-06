@@ -1,13 +1,17 @@
 #include "app/ui/Canvas.hpp"
 
+#include "app/ui/Fonts.hpp"
 #include "app/ui/Theme.hpp"
 #include "app/ui/text/TextLayout.hpp"
+#include "app/ui/text/Utf8.hpp"
 
 #include <algorithm>
 #include <array>
 #include <climits>
 #include <cmath>
 #include <numbers>
+#include <optional>
+#include <string>
 
 namespace sloptube::app {
 namespace {
@@ -37,6 +41,57 @@ std::size_t utf8Length(unsigned char lead) {
     return 4;
 }
 
+// Every regional indicator shares its first three UTF-8 bytes; the last tells them apart.
+constexpr std::array<char, 3> kRegionalIndicatorBytesLead{
+    static_cast<char>(0xF0 | (kRegionalIndicatorA >> 18)),
+    static_cast<char>(0x80 | ((kRegionalIndicatorA >> 12) & 0x3F)),
+    static_cast<char>(0x80 | ((kRegionalIndicatorA >> 6) & 0x3F)),
+};
+constexpr std::string_view kRegionalIndicatorLead(kRegionalIndicatorBytesLead.data(),
+                                                  kRegionalIndicatorBytesLead.size());
+constexpr unsigned char kRegionalIndicatorFirst = 0x80 | (kRegionalIndicatorA & 0x3F);
+constexpr std::size_t kRegionalIndicatorBytes = 4;
+
+// The regional indicator at `at`, from 0 for A, if there is one.
+std::optional<char32_t> regionalIndicator(std::string_view text, std::size_t at) {
+    if (text.size() - at < kRegionalIndicatorBytes ||
+        !text.substr(at).starts_with(kRegionalIndicatorLead)) {
+        return std::nullopt;
+    }
+    const auto last = static_cast<unsigned char>(text[at + kRegionalIndicatorBytes - 1]);
+    if (last < kRegionalIndicatorFirst || last >= kRegionalIndicatorFirst + kRegionalIndicators) {
+        return std::nullopt;
+    }
+    return last - kRegionalIndicatorFirst;
+}
+
+// `text` with each pair of regional indicators as its flag's code point (see kFlagFirst), kept in
+// `folded`. Done before lines are measured and cut, so that a flag is never split in two. Text
+// without any, nearly all of it, is returned as it is.
+std::string_view foldFlags(std::string_view text, std::string& folded) {
+    std::size_t at = text.find(kRegionalIndicatorLead);
+    if (at == std::string_view::npos) {
+        return text;
+    }
+    folded.reserve(text.size());
+    folded = text.substr(0, at);
+    while (at < text.size()) {
+        const auto first = regionalIndicator(text, at);
+        const auto second =
+            first ? regionalIndicator(text, at + kRegionalIndicatorBytes) : std::nullopt;
+        if (!second) {
+            // Whole code points, so that a lead never pairs up with the middle of another.
+            const std::size_t length = utf8Length(static_cast<unsigned char>(text[at]));
+            folded += text.substr(at, length);
+            at += length;
+            continue;
+        }
+        text::encodeUtf8(kFlagFirst + *first * kRegionalIndicators + *second, folded);
+        at += kRegionalIndicatorBytes * 2;
+    }
+    return folded;
+}
+
 } // namespace
 
 Canvas Canvas::with(Weight weight) const {
@@ -56,11 +111,13 @@ float Canvas::lineHeight(float sizeSp) const {
     return dp(sizeSp) * m_fonts.lineSpacing;
 }
 
-ImVec2 Canvas::measure(float sizeSp, std::string_view text) const {
+ImVec2 Canvas::measure(float sizeSp, std::string_view source) const {
     const float size = dp(sizeSp);
-    if (text.empty()) {
+    if (source.empty()) {
         return {}; // Also guards ImGui from strlen() on a null data pointer.
     }
+    std::string folded;
+    const std::string_view text = foldFlags(source, folded);
     ImVec2 extent;
     if (const text::Paragraph* laid = text::layoutBidi(m_font, size, text, FLT_MAX, INT_MAX)) {
         for (const text::VisualLine& visual : laid->lines) {
@@ -75,8 +132,10 @@ ImVec2 Canvas::measure(float sizeSp, std::string_view text) const {
     return extent;
 }
 
-void Canvas::text(ImVec2 position, float sizeSp, ImU32 color, std::string_view text) const {
+void Canvas::text(ImVec2 position, float sizeSp, ImU32 color, std::string_view source) const {
     const float size = dp(sizeSp);
+    std::string folded;
+    const std::string_view text = foldFlags(source, folded);
     if (const text::Paragraph* laid = text::layoutBidi(m_font, size, text, FLT_MAX, INT_MAX)) {
         for (const text::VisualLine& visual : laid->lines) {
             draw(position, size, color, visual.text);
@@ -93,8 +152,10 @@ void Canvas::line(ImVec2 position, float width, float sizeSp, ImU32 color, std::
 }
 
 float Canvas::paragraph(ImVec2 position, float width, float sizeSp, ImU32 color,
-                        std::string_view text, int maxLines, TextAlign align) const {
+                        std::string_view source, int maxLines, TextAlign align) const {
     const float size = dp(sizeSp);
+    std::string folded;
+    const std::string_view text = foldFlags(source, folded);
     const float advance = lineHeight(sizeSp);
     int lines = 0;
     const auto origin = [&](float lineWidth, bool rtl) {
@@ -126,8 +187,10 @@ float Canvas::paragraph(ImVec2 position, float width, float sizeSp, ImU32 color,
     return static_cast<float>(lines) * advance;
 }
 
-int Canvas::lineCount(float width, float sizeSp, std::string_view text, int maxLines) const {
+int Canvas::lineCount(float width, float sizeSp, std::string_view source, int maxLines) const {
     const float size = dp(sizeSp);
+    std::string folded;
+    const std::string_view text = foldFlags(source, folded);
     if (const text::Paragraph* laid = text::layoutBidi(m_font, size, text, width, maxLines)) {
         return static_cast<int>(laid->lines.size());
     }
@@ -150,10 +213,13 @@ void Canvas::avatar(ImVec2 center, float sizeDp, std::string_view name) const {
     if (name.empty()) {
         return;
     }
-    const auto initial = name.substr(0, utf8Length(static_cast<unsigned char>(name[0])));
+    // A flag counts as one character.
+    std::string folded;
+    const std::string_view shown = foldFlags(name, folded);
+    const auto initial = shown.substr(0, utf8Length(static_cast<unsigned char>(shown[0])));
     const float sizeSp = sizeDp * 0.45f;
     const ImVec2 extent = measure(sizeSp, initial);
-    text({center.x - extent.x * 0.5f, center.y - extent.y * 0.5f}, sizeSp, theme::kTextPrimary,
+    text({center.x - extent.x * 0.5f, center.y - extent.y * 0.5f}, sizeSp, theme::g_textPrimary,
          initial);
 }
 
@@ -247,7 +313,7 @@ void Canvas::icon(Icon icon, ImVec2 c, float sizeDp, ImU32 color) const {
         break;
     case Icon::Send:
         m_list->AddTriangleFilled(p(-9, -8), p(10, 0), p(-9, 8), color);
-        m_list->AddTriangleFilled(p(-9, -8), p(-5, 0), p(-9, 8), IM_COL32_BLACK);
+        m_list->AddTriangleFilled(p(-9, -8), p(-5, 0), p(-9, 8), theme::g_background);
         break;
     case Icon::Check:
         m_list->AddLine(p(-8, 0), p(-3, 6), color, stroke);
@@ -278,8 +344,8 @@ void Canvas::icon(Icon icon, ImVec2 c, float sizeDp, ImU32 color) const {
         break;
     case Icon::Verified:
         m_list->AddCircleFilled(c, unit * 10, color);
-        m_list->AddLine(p(-5, 0), p(-1.5f, 4), theme::kBackground, stroke * 1.2f);
-        m_list->AddLine(p(-1.5f, 4), p(5.5f, -4), theme::kBackground, stroke * 1.2f);
+        m_list->AddLine(p(-5, 0), p(-1.5f, 4), theme::g_background, stroke * 1.2f);
+        m_list->AddLine(p(-1.5f, 4), p(5.5f, -4), theme::g_background, stroke * 1.2f);
         break;
     case Icon::Mic:
         // A capsule in a cradle on a stem.
@@ -419,8 +485,8 @@ void Canvas::icon(Icon icon, ImVec2 c, float sizeDp, ImU32 color) const {
     case Icon::Downloaded:
         if (icon == Icon::Downloaded) {
             m_list->AddCircleFilled(p(0, -2), unit * 8, color);
-            m_list->AddLine(p(-4, -2), p(-1, 1), IM_COL32_BLACK, stroke);
-            m_list->AddLine(p(-1, 1), p(4, -5), IM_COL32_BLACK, stroke);
+            m_list->AddLine(p(-4, -2), p(-1, 1), theme::g_textOnLight, stroke);
+            m_list->AddLine(p(-1, 1), p(4, -5), theme::g_textOnLight, stroke);
         } else {
             m_list->AddLine(p(0, -9), p(0, 4), color, stroke);
             m_list->AddLine(p(-5, -1), p(0, 4), color, stroke);
@@ -433,8 +499,8 @@ void Canvas::icon(Icon icon, ImVec2 c, float sizeDp, ImU32 color) const {
         break;
     case Icon::CheckboxOn:
         m_list->AddRectFilled(p(-9, -9), p(9, 9), color, unit * 2);
-        m_list->AddLine(p(-5, 0), p(-1.5f, 4), IM_COL32_BLACK, stroke);
-        m_list->AddLine(p(-1.5f, 4), p(5.5f, -4), IM_COL32_BLACK, stroke);
+        m_list->AddLine(p(-5, 0), p(-1.5f, 4), theme::g_textOnLight, stroke);
+        m_list->AddLine(p(-1.5f, 4), p(5.5f, -4), theme::g_textOnLight, stroke);
         break;
     }
 }

@@ -176,36 +176,36 @@ void App::drawSearch(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
 
     // The bar, as measured on the official app: back, the rounded field with its clear button,
     // the microphone in a circle, then more.
-    c.rect({min.x, 0}, {max.x, contentMin.y}, theme::kBackground);
-    if (iconButton(frame, Icon::Back, {min.x + c.dp(kBackX), centerY}, theme::kTextPrimary)) {
+    c.rect({min.x, 0}, {max.x, contentMin.y}, theme::g_background);
+    if (iconButton(frame, Icon::Back, {min.x + c.dp(kBackX), centerY}, theme::g_textPrimary)) {
         later([this] { goBack(); });
     }
     // Filters apply to the results, so "more" opens them only then; it is lit while any filter
     // is on.
     const bool filtered = m_filters != innertube::SearchFilters{};
     if (iconButton(frame, Icon::MoreVertical, {max.x - c.dp(kMoreRight), centerY},
-                   filtered ? theme::kAccent : theme::kTextPrimary) &&
+                   filtered ? theme::kAccent : theme::g_textPrimary) &&
         !typing) {
         m_filtersOpen = !m_filtersOpen;
         screen.feed->scroller.reset();
     }
     const ImVec2 mic{max.x - c.dp(kMicRight), centerY};
-    c.list()->AddCircleFilled(mic, c.dp(kFieldHeight) * 0.5f, theme::kSurface);
-    c.icon(Icon::Mic, mic, theme::kIconSize, theme::kTextPrimary);
+    c.list()->AddCircleFilled(mic, c.dp(kFieldHeight) * 0.5f, theme::g_surface);
+    c.icon(Icon::Mic, mic, theme::kIconSize, theme::g_textPrimary);
     if (frame.touch.tapped({mic.x - c.dp(kFieldHeight) * 0.5f, min.y},
                            {mic.x + c.dp(kFieldHeight) * 0.5f, contentMin.y})) {
-        m_platform.startVoiceSearch();
+        later([this] { openVoiceSearch(); });
     }
 
     const float fieldX = min.x + c.dp(kFieldX);
     const float fieldRight = max.x - c.dp(kFieldRight);
     const float fieldHeight = c.dp(kFieldHeight);
     c.rect({fieldX, centerY - fieldHeight * 0.5f}, {fieldRight, centerY + fieldHeight * 0.5f},
-           theme::kSurface, kFieldHeight * 0.5f);
+           theme::g_surface, kFieldHeight * 0.5f);
     const bool hasQuery = m_query[0] != '\0';
     if (hasQuery) {
         const ImVec2 clear{fieldRight - c.dp(kClearRight), centerY};
-        c.icon(Icon::Close, clear, kClearIcon, theme::kTextPrimary);
+        c.icon(Icon::Close, clear, kClearIcon, theme::g_textPrimary);
         if (frame.touch.tapped({clear.x - c.dp(kClearRight), clear.y - fieldHeight * 0.5f},
                                {fieldRight, clear.y + fieldHeight * 0.5f})) {
             std::ranges::fill(m_query, '\0');
@@ -278,14 +278,14 @@ void App::drawSearchSuggestions(Frame& frame, ImVec2 min, ImVec2 max) {
         const float iconX = min.x + gutter + c.dp(theme::kIconSize) * 0.5f;
         drawPressed(frame, {min.x, y}, rowMax);
         c.icon(entry.past ? Icon::History : Icon::Search, {iconX, centerY}, theme::kIconSize,
-               theme::kTextSecondary);
+               theme::g_textSecondary);
         const float textX = iconX + c.dp(theme::kIconSize) * 0.5f + gutter;
         const float insert = c.dp(theme::kIconSize) + gutter * 2;
         c.line({textX, centerY - c.lineHeight(theme::kBodySize) * 0.5f}, max.x - insert - textX,
-               theme::kBodySize, theme::kTextPrimary, entry.text);
+               theme::kBodySize, theme::g_textPrimary, entry.text);
         // The arrow puts the suggestion in the field to go on typing; the row searches it.
         const ImVec2 arrow{max.x - gutter - c.dp(theme::kIconSize) * 0.5f, centerY};
-        if (iconButton(frame, Icon::InsertUp, arrow, theme::kTextSecondary)) {
+        if (iconButton(frame, Icon::InsertUp, arrow, theme::g_textSecondary)) {
             ImGui::ClearActiveID(); // The field reloads the text when it takes focus again.
             std::ranges::fill(m_query, '\0');
             std::ranges::copy(entry.text.substr(0, m_query.size() - 2), m_query.begin());
@@ -309,7 +309,7 @@ float App::drawSearchFilters(Frame& frame, Screen& screen, ImVec2 origin, float 
     for (const FilterGroup& group : kFilterGroups) {
         medium.text({origin.x + gutter,
                      y + (c.dp(kFilterGroupTitleHeight) - c.lineHeight(theme::kCaptionSize))},
-                    theme::kCaptionSize, theme::kTextSecondary, tr(group.title));
+                    theme::kCaptionSize, theme::g_textSecondary, tr(group.title));
         y += c.dp(kFilterGroupTitleHeight) + gutter * 0.5f;
         float x = origin.x + gutter;
         for (const FilterChip& filter : group.chips) {

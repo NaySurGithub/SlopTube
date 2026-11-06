@@ -131,11 +131,11 @@ void App::drawUnreadBadge(const Canvas& c, ImVec2 bell, int count) {
     const ImVec2 max{min.x + width, min.y + c.dp(kBadgeHeight)};
     // A ring of the bar's colour separates it from the bell, as on the official app.
     c.rect({min.x - c.dp(2), min.y - c.dp(2)}, {max.x + c.dp(2), max.y + c.dp(2)},
-           theme::kBackground, kBadgeHeight * 0.5f + 2);
+           theme::g_background, kBadgeHeight * 0.5f + 2);
     c.rect(min, max, theme::kBadgeRed, kBadgeHeight * 0.5f);
     medium.text({(min.x + max.x - medium.measure(kBadgeTextSize, text).x) * 0.5f,
                  (min.y + max.y - c.lineHeight(kBadgeTextSize)) * 0.5f},
-                kBadgeTextSize, theme::kTextPrimary, text);
+                kBadgeTextSize, IM_COL32_WHITE, text);
 }
 
 void App::openNotifications() {
@@ -223,7 +223,7 @@ void App::drawNotifications(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max
         if (row.section) {
             medium.text(
                 {min.x + c.dp(16), y + (sectionHeight - c.lineHeight(theme::kBodySize)) * 0.5f},
-                theme::kBodySize, theme::kTextSecondary, tr(*row.section));
+                theme::kBodySize, theme::g_textSecondary, tr(*row.section));
             y += height;
             continue;
         }
@@ -234,23 +234,23 @@ void App::drawNotifications(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max
         const float top = y + c.dp(kNotificationTop);
         if (m_unreadAtOpen.contains(item.id)) {
             c.list()->AddCircleFilled({min.x + c.dp(8), top + avatar * 0.5f + c.dp(2)},
-                                      c.dp(kUnreadDot) * 0.5f, theme::kLink);
+                                      c.dp(kUnreadDot) * 0.5f, theme::g_link);
         }
         drawAvatar(frame, itemAvatar(frame, item), item.channel,
                    {min.x + c.dp(kNotificationAvatarX) + avatar * 0.5f, top + avatar * 0.5f},
                    kNotificationAvatar);
         float textY = top;
-        bold.line({textX, textY}, textWidth, theme::kBodySize, theme::kTextPrimary, item.channel);
+        bold.line({textX, textY}, textWidth, theme::kBodySize, theme::g_textPrimary, item.channel);
         textY += c.lineHeight(theme::kBodySize);
-        textY += c.paragraph({textX, textY}, textWidth, theme::kBodySize, theme::kTextPrimary,
+        textY += c.paragraph({textX, textY}, textWidth, theme::kBodySize, theme::g_textPrimary,
                              std::string(tr(Text::UploadedPrefix)) + item.title, 2);
-        c.line({textX, textY}, textWidth, theme::kCaptionSize, theme::kTextSecondary,
+        c.line({textX, textY}, textWidth, theme::kCaptionSize, theme::g_textSecondary,
                notificationTime(item.detail));
         const ImVec2 thumbMin{thumbX, top};
         const ImVec2 thumbMax{thumbX + thumbWidth, top + thumbWidth * theme::kAspect16x9};
         drawThumbnail(frame, imageUrl(item), thumbMin, thumbMax, theme::kCornerRadius);
         const ImVec2 more{max.x - c.dp(16), top + c.dp(4)};
-        c.icon(Icon::MoreHorizontal, more, 18, theme::kTextPrimary);
+        c.icon(Icon::MoreHorizontal, more, 18, theme::g_textPrimary);
         if (!feed->scroller.moving()) {
             if (frame.touch.tapped({thumbMax.x, y}, rowMax)) {
                 later([this, item] { openItemActions(item); });

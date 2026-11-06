@@ -21,6 +21,15 @@ enum class MediaCommand : std::uint8_t {
     Stop,
 };
 
+// Of voice search, in the order of the VOICE_ constants of SlopTubeActivity.
+enum class VoiceState : std::uint8_t {
+    Listening, // The microphone is open.
+    NoMatch,   // Nothing was understood.
+    Denied,    // The microphone permission was refused.
+    Failed,    // The recognition service failed.
+    Stopped,   // The app left the screen while listening.
+};
+
 struct BridgeEvent {
     enum class Kind : std::uint8_t {
         OpenVideo,                 // A notification was tapped.
@@ -29,6 +38,9 @@ struct BridgeEvent {
         Media,                     // Notification, lock screen, headset or Bluetooth control.
         UpdateFailed,              // Installing an update failed or was declined.
         VoiceSearch,               // Android's speech recognizer heard a query.
+        VoicePartial,              // The words heard so far, while listening.
+        VoiceLevel,                // The microphone's sound level, while listening.
+        VoiceState,                // The listening screen moved on (VoiceState).
     };
 
     Kind kind = Kind::Media;
@@ -37,7 +49,9 @@ struct BridgeEvent {
     MediaCommand command = MediaCommand::Play; // Media.
     std::int64_t positionMs = 0;               // Media: Seek.
     std::string reason;                        // UpdateFailed, as Android words it.
-    std::string query;                         // VoiceSearch.
+    std::string query;                         // VoiceSearch, VoicePartial.
+    float levelDb = 0;                         // VoiceLevel, as SpeechRecognizer reports it.
+    VoiceState voice = VoiceState::Listening;  // VoiceState.
 };
 
 // Events arrive on Java threads, so `handler` must be thread-safe. Events sent while no handler

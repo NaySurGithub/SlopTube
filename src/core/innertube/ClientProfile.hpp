@@ -29,6 +29,8 @@ struct ClientProfile {
     std::string_view osVersion;
     int androidSdkVersion;
     bool acceptsOAuth;
+    // `playbackContext.contentPlaybackContext.signatureTimestamp` of player requests; 0 for none.
+    std::int64_t signatureTimestamp;
 };
 
 [[nodiscard]] const ClientProfile& clientProfile(ClientKind kind);

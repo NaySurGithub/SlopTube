@@ -97,7 +97,7 @@ void App::drawDownloadSheet(Frame& frame, ImVec2 min, ImVec2 max) {
 
     float y = min.y + c.dp(kSheetTop);
     c.with(theme::kHeadingWeight)
-        .text({min.x + gutter * 1.5f, y}, theme::kSheetTitleSize, theme::kTextPrimary,
+        .text({min.x + gutter * 1.5f, y}, theme::kSheetTitleSize, theme::g_textPrimary,
               tr(Text::DownloadVideo));
     y += c.lineHeight(theme::kSheetTitleSize) + gutter;
 
@@ -106,14 +106,14 @@ void App::drawDownloadSheet(Frame& frame, ImVec2 min, ImVec2 max) {
         const ImVec2 rowMax{max.x, y + row};
         drawPressed(frame, rowMin, rowMax);
         const float centerY = y + row * 0.5f;
-        c.icon(icon, {iconX, centerY}, theme::kIconSize, theme::kTextPrimary);
+        c.icon(icon, {iconX, centerY}, theme::kIconSize, theme::g_textPrimary);
         const float detailWidth = c.measure(theme::kCaptionSize, detail).x;
         c.line({textX, centerY - c.lineHeight(theme::kBodySize) * 0.5f},
-               max.x - textX - detailWidth - gutter * 3, theme::kBodySize, theme::kTextPrimary,
+               max.x - textX - detailWidth - gutter * 3, theme::kBodySize, theme::g_textPrimary,
                label);
         c.text({max.x - gutter * 1.5f - detailWidth,
                 centerY - c.lineHeight(theme::kCaptionSize) * 0.5f},
-               theme::kCaptionSize, theme::kTextSecondary, detail);
+               theme::kCaptionSize, theme::g_textSecondary, detail);
         y += row;
         return frame.touch.tapped(rowMin, rowMax);
     };
@@ -138,14 +138,14 @@ void App::drawDownloadSheet(Frame& frame, ImVec2 min, ImVec2 max) {
         return;
     }
     if (sheet.loading) {
-        c.spinner({(min.x + max.x) * 0.5f, y + row}, theme::kSpinnerSize, theme::kTextPrimary,
+        c.spinner({(min.x + max.x) * 0.5f, y + row}, theme::kSpinnerSize, theme::g_textPrimary,
                   frame.time);
         frame.animating = true;
         return;
     }
     if (sheet.failed || !sheet.player) {
         c.line({min.x + gutter, y + row - c.lineHeight(theme::kBodySize) * 0.5f},
-               max.x - min.x - gutter * 2, theme::kBodySize, theme::kTextSecondary,
+               max.x - min.x - gutter * 2, theme::kBodySize, theme::g_textSecondary,
                tr(Text::ActionFailed), TextAlign::Center);
         return;
     }
@@ -186,9 +186,9 @@ void App::drawDownloads(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
         const float width = std::min(c.dp(280), max.x - min.x - c.dp(theme::kGutter) * 2);
         const float centerY = (listMin.y + max.y) * 0.5f;
         c.icon(Icon::Download, {(min.x + max.x) * 0.5f, centerY - c.dp(48)}, 48,
-               theme::kTextSecondary);
+               theme::g_textSecondary);
         c.paragraph({(min.x + max.x - width) * 0.5f, centerY}, width, theme::kBodySize,
-                    theme::kTextSecondary, tr(Text::NoDownloads), 4, TextAlign::Center);
+                    theme::g_textSecondary, tr(Text::NoDownloads), 4, TextAlign::Center);
     } else if (const auto tapped = drawList(frame, feed, ItemStyle::Row, listMin, max, {}, [] {})) {
         const Download& d = downloads[*tapped];
         if (d.state == DownloadState::Failed) {
@@ -209,13 +209,13 @@ void App::drawOffline(Frame& frame, const std::shared_ptr<Feed>& feed, ImVec2 mi
     const float x = (min.x + max.x - width) * 0.5f;
     float y = (min.y + max.y) * 0.5f - c.dp(96);
 
-    c.icon(Icon::Download, {(min.x + max.x) * 0.5f, y}, 48, theme::kTextSecondary);
+    c.icon(Icon::Download, {(min.x + max.x) * 0.5f, y}, 48, theme::g_textSecondary);
     y += c.dp(48);
     y += c.with(theme::kHeadingWeight)
-             .paragraph({x, y}, width, theme::kSectionSize, theme::kTextPrimary, tr(Text::Offline),
+             .paragraph({x, y}, width, theme::kSectionSize, theme::g_textPrimary, tr(Text::Offline),
                         2, TextAlign::Center);
     y += gutter * 0.5f;
-    y += c.paragraph({x, y}, width, theme::kBodySize, theme::kTextSecondary, tr(Text::OfflineHint),
+    y += c.paragraph({x, y}, width, theme::kBodySize, theme::g_textSecondary, tr(Text::OfflineHint),
                      3, TextAlign::Center);
     y += gutter * 1.5f;
 

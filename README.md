@@ -40,7 +40,7 @@ without a copy.
 
 - **Feeds** - Home with Shorts shelves and community posts, Subscriptions, history, playlists,
   and channels with their Videos, Shorts, Live and Playlists tabs
-- **Search** - suggestions while typing, past searches, and filters (date, type, duration, live,
+- **Search** - suggestions while typing, voice search, past searches, and filters (date, type, duration, live,
   HD, 4K, subtitles, popularity)
 - **Account** - Google sign-in with a device code, several accounts, likes, subscriptions,
   comments and replies, saving to playlists
@@ -60,17 +60,18 @@ without a copy.
 - **Subtitles** - every track, with machine translation
 - **Downloads** - videos with their subtitles, watchable offline
 - **Text** - every script, Arabic shaping, right-to-left text and colour emoji
-- **Languages** - English and French, following the phone
+- **Languages** - English, French and Spanish, following the phone or chosen in Settings
 
 ## Downloads
 
 Download the app from the [website](https://naysurgithub.github.io/SlopTube/), which also has
 step-by-step install instructions. Signed APKs are published on the
 [releases page](https://github.com/NaySurGithub/SlopTube/releases).
-Every push to `main` also builds a debug-signed APK, available from the latest
-[CI run](https://github.com/NaySurGithub/SlopTube/actions/workflows/ci.yml). Both need Android 11
-or newer on a 64-bit ARM phone. The two are signed with different keys, so switching from one to
-the other needs an uninstall first.
+New commits on `main` are also published as nightly prereleases there, and every push to `main`
+builds a debug-signed APK, available from the latest
+[CI run](https://github.com/NaySurGithub/SlopTube/actions/workflows/ci.yml). All of them need
+Android 11 or newer on a 64-bit ARM phone. Release and debug APKs are signed with different keys,
+so switching from one to the other needs an uninstall first.
 
 ## Building
 
@@ -89,8 +90,9 @@ the InnerTube endpoints, the media pipeline and the interface.
 
 ## Contributing
 
-Pull requests are welcome. Read [docs/contributing.md](docs/contributing.md) first: code is
-formatted with the repository's `.clang-format`, and CI rejects unformatted code.
+Pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) and
+[docs/contributing.md](docs/contributing.md) first: pull requests target `dev`, commits follow
+Conventional Commits, and CI rejects code not formatted with the repository's `.clang-format`.
 
 ## Licensing information
 

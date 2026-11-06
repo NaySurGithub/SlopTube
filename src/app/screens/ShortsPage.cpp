@@ -194,11 +194,11 @@ void App::drawShortsShelf(Frame& frame, ImVec2 origin, float width, std::size_t 
     const float centerY = origin.y + c.dp(kShelfHeader) * 0.5f;
     const float icon = c.dp(theme::kIconSize);
     c.icon(Icon::Shorts, {origin.x + gutter + icon * 0.5f, centerY}, theme::kIconSize,
-           theme::kTextPrimary);
+           theme::g_textPrimary);
     c.with(theme::kHeadingWeight)
         .text(
             {origin.x + gutter * 1.75f + icon, centerY - c.lineHeight(theme::kSectionSize) * 0.5f},
-            theme::kSectionSize, theme::kTextPrimary, tr(Text::Shorts));
+            theme::kSectionSize, theme::g_textPrimary, tr(Text::Shorts));
 
     const auto& items = shortsFeed().page.items;
     const float top = origin.y + c.dp(kShelfHeader);
@@ -217,7 +217,7 @@ void App::drawShortsShelf(Frame& frame, ImVec2 origin, float width, std::size_t 
         const float titleHeight = c.lineHeight(theme::kBodySize) * 2;
         c.with(theme::kTitleWeight)
             .paragraph({x + inset, max.y - inset - titleHeight}, tile - inset * 2, theme::kBodySize,
-                       theme::kTextPrimary, item.title, 2);
+                       IM_COL32_WHITE, item.title, 2);
         // Hit box clamped to the list so tiles scrolled under the bars leave them their taps.
         const ImVec2 clipMin = c.list()->GetClipRectMin();
         const ImVec2 clipMax = c.list()->GetClipRectMax();
@@ -228,6 +228,7 @@ void App::drawShortsShelf(Frame& frame, ImVec2 origin, float width, std::size_t 
 }
 
 void App::drawShorts(Frame& frame, ImVec2 min, ImVec2 max) {
+    const theme::DarkScope darkColours;
     const Canvas& c = frame.canvas;
     const auto& feed = m_tabFeeds[std::to_underlying(Tab::Shorts)];
     c.rect(min, max, IM_COL32_BLACK);
@@ -342,6 +343,7 @@ void App::drawShorts(Frame& frame, ImVec2 min, ImVec2 max) {
 }
 
 void App::drawLikeBurst(Frame& frame) {
+    const theme::DarkScope darkColours;
     const float elapsed = static_cast<float>(frame.time - m_shorts.burstAt);
     if (m_shorts.burstAt < 0 || elapsed > kBurstDuration) {
         m_shorts.burstAt = -1;
@@ -368,14 +370,14 @@ void App::drawLikeBurst(Frame& frame) {
                 return ImVec2{centre.x + direction.x * radius, centre.y + direction.y * radius};
             };
             c.list()->AddLine(at(tail), at(head),
-                              ray % 2 == 0 ? theme::kAccent : theme::kTextPrimary,
+                              ray % 2 == 0 ? theme::kAccent : theme::g_textPrimary,
                               c.dp(kBurstStroke));
         }
     }
     const float pop =
         motion::easeOutBack(motion::progress(frame.time, m_shorts.burstAt, motion::kPopDuration));
     c.icon(Icon::ThumbUpFilled, centre, kBurstThumb * pop,
-           motion::withAlpha(theme::kTextPrimary, alpha));
+           motion::withAlpha(theme::g_textPrimary, alpha));
 }
 
 void App::drawShort(Frame& frame, const innertube::Item& item, bool current, ImVec2 min,
@@ -408,7 +410,7 @@ void App::drawShort(Frame& frame, const innertube::Item& item, bool current, ImV
         }
         if ((state == media::PlayerState::Loading || m_player.buffering()) && !m_shorts.scrub) {
             c.spinner({(min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f}, theme::kSpinnerSize * 1.4f,
-                      theme::kTextPrimary, frame.time);
+                      theme::g_textPrimary, frame.time);
             frame.animating = true;
         }
         // While playing, each new video frame wakes the loop and moves the bar; redrawing at the
@@ -418,7 +420,7 @@ void App::drawShort(Frame& frame, const innertube::Item& item, bool current, ImV
         // While seeking only the video and the bar show, the bar red with a handle.
         const float barTop = max.y - c.dp(kProgressHeight);
         const float handle = min.x + width * *m_shorts.scrub;
-        c.rect({min.x, barTop}, max, theme::kTrack);
+        c.rect({min.x, barTop}, max, theme::g_track);
         c.rect({min.x, barTop}, {handle, max.y}, theme::kAccent);
         c.list()->AddCircleFilled({handle, barTop + c.dp(kProgressHeight) * 0.5f},
                                   c.dp(theme::kScrubHandle), theme::kAccent);
@@ -444,13 +446,13 @@ void App::drawShort(Frame& frame, const innertube::Item& item, bool current, ImV
         const bool pressed = enabled && frame.touch.pressed(hitMin, hitMax);
         const ImVec2 center{actionX, iconY};
         c.icon(icon, {center.x + shadow, center.y + shadow}, kActionIcon, kShadow);
-        c.icon(icon, center, pressed ? kActionIcon * 0.9f : kActionIcon, theme::kTextPrimary);
+        c.icon(icon, center, pressed ? kActionIcon * 0.9f : kActionIcon, theme::g_textPrimary);
         const float labelWidth = medium.measure(theme::kCaptionSize, label).x;
         // Centred under the icon, but kept on screen when longer than the column ("Dislike").
         const ImVec2 labelAt{std::min(center.x - labelWidth * 0.5f, max.x - gutter - labelWidth),
                              center.y + c.dp(kActionLabel) - captionHeight * 0.5f};
         medium.text({labelAt.x + shadow, labelAt.y + shadow}, theme::kCaptionSize, kShadow, label);
-        medium.text(labelAt, theme::kCaptionSize, theme::kTextPrimary, label);
+        medium.text(labelAt, theme::kCaptionSize, theme::g_textPrimary, label);
         if (pressed) {
             frame.animating = true;
         }
@@ -488,7 +490,7 @@ void App::drawShort(Frame& frame, const innertube::Item& item, bool current, ImV
         c.lineHeight(theme::kBodySize) *
         static_cast<float>(c.lineCount(textWidth, theme::kBodySize, title, kShortTitleLines));
     const ImVec2 titleMin{min.x + gutter, bottom - titleHeight};
-    c.paragraph(titleMin, textWidth, theme::kBodySize, theme::kTextPrimary, title,
+    c.paragraph(titleMin, textWidth, theme::kBodySize, theme::g_textPrimary, title,
                 kShortTitleLines);
     if (info && current && frame.touch.tapped(titleMin, {textRight, bottom})) {
         later([this] { openSheet(Sheet::Description); });
@@ -504,7 +506,7 @@ void App::drawShort(Frame& frame, const innertube::Item& item, bool current, ImV
         const float nameWidth = medium.measure(theme::kBodySize, channel.name).x;
         const float maxName = std::max(0.0f, width * 0.45f);
         medium.line({nameX, centerY - c.lineHeight(theme::kBodySize) * 0.5f}, maxName,
-                    theme::kBodySize, theme::kTextPrimary, channel.name);
+                    theme::kBodySize, theme::g_textPrimary, channel.name);
         if (current &&
             frame.touch.tapped({min.x, centerY - avatar * 0.5f},
                                {nameX + std::min(nameWidth, maxName), centerY + avatar * 0.5f})) {
@@ -524,7 +526,7 @@ void App::drawShort(Frame& frame, const innertube::Item& item, bool current, ImV
         drawAvatar(frame, itemAvatar(frame, item), item.channel,
                    {min.x + gutter + avatar * 0.5f, centerY}, kChannelAvatar);
         medium.line({min.x + gutter * 2 + avatar, centerY - c.lineHeight(theme::kBodySize) * 0.5f},
-                    width * 0.5f, theme::kBodySize, theme::kTextPrimary, item.channel);
+                    width * 0.5f, theme::kBodySize, theme::g_textPrimary, item.channel);
     }
 
     // Playback progress along the bottom edge, and tap anywhere else to pause.
@@ -533,13 +535,13 @@ void App::drawShort(Frame& frame, const innertube::Item& item, bool current, ImV
         if (duration > 0) {
             const float fraction =
                 std::clamp(static_cast<float>(m_player.positionUs()) / duration, 0.0f, 1.0f);
-            c.rect({min.x, max.y - c.dp(kProgressHeight)}, max, theme::kTrack);
+            c.rect({min.x, max.y - c.dp(kProgressHeight)}, max, theme::g_track);
             c.rect({min.x, max.y - c.dp(kProgressHeight)}, {min.x + width * fraction, max.y},
-                   theme::kTextPrimary);
+                   theme::g_textPrimary);
         }
         if (state == media::PlayerState::Paused) {
             c.icon(Icon::Play, {(min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f},
-                   theme::kPlayButtonSize, motion::withAlpha(theme::kTextPrimary, 0.8f));
+                   theme::kPlayButtonSize, motion::withAlpha(theme::g_textPrimary, 0.8f));
         }
         // A second tap soon after likes the short, as in the official app, so a tap pauses only
         // once no second one can follow.

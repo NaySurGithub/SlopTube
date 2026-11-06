@@ -13,7 +13,9 @@ import android.content.res.Configuration;
 import android.media.AudioManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.util.Rational;
 
 import java.io.FileInputStream;
@@ -34,11 +36,19 @@ public final class SlopTubeActivity extends NativeActivity {
     private static final float MAX_PIP_RATIO = 2.39f;
     private static final int NOTIFICATIONS_REQUEST = 1;
     private static final int VOICE_REQUEST = 2;
+    private static final int MICROPHONE_REQUEST = 3;
+    // States of the listening screen, as VoiceState in src/app/platform/Bridge.hpp.
+    private static final int VOICE_LISTENING = 0;
+    private static final int VOICE_NO_MATCH = 1;
+    private static final int VOICE_DENIED = 2;
+    private static final int VOICE_FAILED = 3;
+    private static final int VOICE_STOPPED = 4;
 
     private boolean pipAllowed;
     private Rational pipAspect = new Rational(16, 9);
     private boolean inPip;
     private boolean stopped;
+    private SpeechRecognizer recognizer;
 
     private static native void nativeOpenVideo(String videoId);
 
@@ -49,6 +59,12 @@ public final class SlopTubeActivity extends NativeActivity {
     private static native void nativeUpdateFailed(String reason);
 
     private static native void nativeVoiceSearch(String query);
+
+    private static native void nativeVoicePartial(String heard);
+
+    private static native void nativeVoiceLevel(float rmsDb);
+
+    private static native void nativeVoiceState(int state);
 
     @Override
     protected void onCreate(Bundle state) {
@@ -154,6 +170,11 @@ public final class SlopTubeActivity extends NativeActivity {
     protected void onStop() {
         super.onStop();
         stopped = true;
+        // The microphone is not kept once the app is out of sight.
+        if (recognizer != null) {
+            releaseRecognizer();
+            nativeVoiceState(VOICE_STOPPED);
+        }
         // The screen turning off also stops a picture-in-picture window; only finishing closes it.
         if (inPip && isFinishing()) {
             nativePictureInPictureDismissed();
@@ -265,20 +286,141 @@ public final class SlopTubeActivity extends NativeActivity {
 
     // --- Voice search ---------------------------------------------------------------------------
 
-    // Android's speech recognizer (the Google app's, usually); the query comes back through
-    // onActivityResult.
-    public void startVoiceSearch() {
+    // Native code draws the listening screen: SpeechRecognizer reports the sound level and the
+    // words as they come, then the query (nativeVoiceSearch). Without a recognition service, the
+    // recognizer's own screen is opened instead, and false tells native code to draw nothing.
+    public boolean startVoiceSearch() {
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            runOnUiThread(this::openRecognizerScreen);
+            return false;
+        }
         runOnUiThread(() -> {
-            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-                    .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                            RecognizerIntent.LANGUAGE_MODEL_WEB_SEARCH)
-                    .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
-            try {
-                startActivityForResult(intent, VOICE_REQUEST);
-            } catch (ActivityNotFoundException | SecurityException unavailable) {
-                // No recognizer on this device: the microphone does nothing.
+            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                    == PackageManager.PERMISSION_GRANTED) {
+                beginListening();
+            } else {
+                requestPermissions(new String[] {Manifest.permission.RECORD_AUDIO},
+                        MICROPHONE_REQUEST);
             }
         });
+        return true;
+    }
+
+    // Stops listening and recognises what was heard so far.
+    public void finishVoiceSearch() {
+        runOnUiThread(() -> {
+            if (recognizer != null) {
+                recognizer.stopListening();
+            }
+        });
+    }
+
+    // Drops the session without a result.
+    public void cancelVoiceSearch() {
+        runOnUiThread(this::releaseRecognizer);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(request, permissions, results);
+        if (request != MICROPHONE_REQUEST) {
+            return;
+        }
+        if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
+            beginListening();
+        } else {
+            nativeVoiceState(VOICE_DENIED);
+        }
+    }
+
+    private void beginListening() {
+        releaseRecognizer();
+        recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+        recognizer.setRecognitionListener(new RecognitionListener() {
+            @Override
+            public void onReadyForSpeech(Bundle params) {
+                nativeVoiceState(VOICE_LISTENING);
+            }
+
+            @Override
+            public void onBeginningOfSpeech() {}
+
+            @Override
+            public void onRmsChanged(float rmsDb) {
+                nativeVoiceLevel(rmsDb);
+            }
+
+            @Override
+            public void onBufferReceived(byte[] buffer) {}
+
+            @Override
+            public void onEndOfSpeech() {}
+
+            @Override
+            public void onError(int error) {
+                releaseRecognizer();
+                nativeVoiceState(error == SpeechRecognizer.ERROR_NO_MATCH
+                                        || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
+                                ? VOICE_NO_MATCH
+                                : error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS
+                                        ? VOICE_DENIED
+                                        : VOICE_FAILED);
+            }
+
+            @Override
+            public void onResults(Bundle results) {
+                releaseRecognizer();
+                String heard = firstResult(results);
+                if (heard.isEmpty()) {
+                    nativeVoiceState(VOICE_NO_MATCH);
+                } else {
+                    nativeVoiceSearch(heard);
+                }
+            }
+
+            @Override
+            public void onPartialResults(Bundle results) {
+                String heard = firstResult(results);
+                if (!heard.isEmpty()) {
+                    nativeVoicePartial(heard);
+                }
+            }
+
+            @Override
+            public void onEvent(int type, Bundle params) {}
+        });
+        recognizer.startListening(new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                        RecognizerIntent.LANGUAGE_MODEL_WEB_SEARCH)
+                .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName()));
+    }
+
+    private void releaseRecognizer() {
+        if (recognizer != null) {
+            recognizer.destroy();
+            recognizer = null;
+        }
+    }
+
+    private static String firstResult(Bundle results) {
+        ArrayList<String> heard =
+                results == null ? null : results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+        return heard == null || heard.isEmpty() || heard.get(0) == null ? "" : heard.get(0).trim();
+    }
+
+    // The recognizer's own screen; the query comes back through onActivityResult.
+    private void openRecognizerScreen() {
+        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                        RecognizerIntent.LANGUAGE_MODEL_WEB_SEARCH)
+                .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+        try {
+            startActivityForResult(intent, VOICE_REQUEST);
+        } catch (ActivityNotFoundException | SecurityException unavailable) {
+            // No recognizer on this device: the microphone does nothing.
+        }
     }
 
     @Override

@@ -70,10 +70,10 @@ float App::drawAccountHeader(Frame& frame, ImVec2 origin, float width) {
     const float block = c.lineHeight(theme::kHeadlineSize) + c.lineHeight(theme::kCaptionSize);
     const float textTop = y + (avatar - block) * 0.5f;
     c.with(theme::kHeadingWeight)
-        .line({textX, textTop}, textWidth, theme::kHeadlineSize, theme::kTextPrimary,
+        .line({textX, textTop}, textWidth, theme::kHeadlineSize, theme::g_textPrimary,
               me.name.empty() ? me.byline : me.name);
     c.line({textX, textTop + c.lineHeight(theme::kHeadlineSize)}, textWidth, theme::kCaptionSize,
-           theme::kTextSecondary, me.handle.empty() ? me.byline : me.handle);
+           theme::g_textSecondary, me.handle.empty() ? me.byline : me.handle);
     y += avatar + c.dp(kProfileButtonsGap);
 
     // Two equal 32 dp pills: the channel (filled) and, where the official app sells Premium,
@@ -84,14 +84,14 @@ float App::drawAccountHeader(Frame& frame, ImVec2 origin, float width) {
     const auto button = [&](ImVec2 min, std::string_view label, bool filled) {
         const ImVec2 max{min.x + buttonWidth, min.y + buttonHeight};
         if (filled) {
-            c.rect(min, max, theme::kTextPrimary, theme::kChipHeight * 0.5f);
+            c.rect(min, max, theme::g_textPrimary, theme::kChipHeight * 0.5f);
         } else {
-            c.list()->AddRect(min, max, theme::kOutline, buttonHeight * 0.5f, c.dp(1));
+            c.list()->AddRect(min, max, theme::g_outline, buttonHeight * 0.5f, c.dp(1));
         }
         drawPressed(frame, min, max, theme::kChipHeight * 0.5f);
         const ImVec2 extent = medium.measure(theme::kBodySize, label);
         medium.text({(min.x + max.x - extent.x) * 0.5f, (min.y + max.y - extent.y) * 0.5f},
-                    theme::kBodySize, filled ? theme::kTextOnLight : theme::kTextPrimary, label);
+                    theme::kBodySize, filled ? theme::g_textOnLight : theme::g_textPrimary, label);
         return frame.touch.tapped(min, max);
     };
     if (button({origin.x + margin, y}, tr(Text::ViewChannel), true)) {
@@ -140,7 +140,7 @@ void App::drawAccountsSheet(Frame& frame, ImVec2 min, ImVec2 max) {
 
     float y = min.y + c.dp(kSheetTop);
     c.with(theme::kHeadingWeight)
-        .text({min.x + gutter * 1.5f, y}, theme::kSheetTitleSize, theme::kTextPrimary,
+        .text({min.x + gutter * 1.5f, y}, theme::kSheetTitleSize, theme::g_textPrimary,
               tr(Text::Accounts));
     y += c.lineHeight(theme::kSheetTitleSize) + gutter;
 
@@ -156,14 +156,14 @@ void App::drawAccountsSheet(Frame& frame, ImVec2 min, ImVec2 max) {
         const float textWidth = max.x - textX - gutter * 4;
         const float block = c.lineHeight(theme::kBodySize) + c.lineHeight(theme::kCaptionSize) * 2;
         medium.line({textX, centerY - block * 0.5f}, textWidth, theme::kBodySize,
-                    theme::kTextPrimary, account.name.empty() ? account.byline : account.name);
+                    theme::g_textPrimary, account.name.empty() ? account.byline : account.name);
         c.line({textX, centerY - block * 0.5f + c.lineHeight(theme::kBodySize)}, textWidth,
-               theme::kCaptionSize, theme::kTextSecondary, account.handle);
+               theme::kCaptionSize, theme::g_textSecondary, account.handle);
         c.line({textX, centerY - block * 0.5f + c.lineHeight(theme::kBodySize) +
                            c.lineHeight(theme::kCaptionSize)},
-               textWidth, theme::kCaptionSize, theme::kTextSecondary, account.byline);
+               textWidth, theme::kCaptionSize, theme::g_textSecondary, account.byline);
         if (i == m_session.activeAccount()) {
-            c.icon(Icon::Check, {max.x - gutter * 2.5f, centerY}, theme::kIconSize, theme::kLink);
+            c.icon(Icon::Check, {max.x - gutter * 2.5f, centerY}, theme::kIconSize, theme::g_link);
         }
         if (frame.touch.tapped(rowMin, rowMax)) {
             later([this, i] {
@@ -180,13 +180,13 @@ void App::drawAccountsSheet(Frame& frame, ImVec2 min, ImVec2 max) {
         drawPressed(frame, rowMin, rowMax);
         const float centerY = y + c.dp(kActionRow) * 0.5f;
         c.icon(icon, {min.x + gutter * 1.5f + avatar * 0.5f, centerY}, theme::kIconSize,
-               theme::kTextPrimary);
+               theme::g_textPrimary);
         c.text({min.x + gutter * 3 + avatar, centerY - c.lineHeight(theme::kBodySize) * 0.5f},
-               theme::kBodySize, theme::kTextPrimary, tr(label));
+               theme::kBodySize, theme::g_textPrimary, tr(label));
         y += c.dp(kActionRow);
         return frame.touch.tapped(rowMin, rowMax);
     };
-    c.rect({min.x, y}, {max.x, y + c.dp(1)}, theme::kDivider);
+    c.rect({min.x, y}, {max.x, y + c.dp(1)}, theme::g_divider);
     y += c.dp(4);
     if (action(Icon::Add, Text::AddAccount)) {
         later([this] {

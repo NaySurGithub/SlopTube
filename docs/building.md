@@ -77,7 +77,7 @@ gradient, and fills:
 
 - the templates of `android/res/` (an adaptive launcher icon with a monochrome layer for themed
   icons, and the theme whose background Android's splash screen uses; the colour comes from
-  `kBackground` in `Theme.hpp`);
+  `kDarkPalette` in `Theme.hpp`);
 - `src/app/ui/LogoShape.hpp.in`, the shape drawn by the launch animation.
 
 The SVG must keep its simple layout: one `id` per path (`play`, `drips`), absolute `M`/`L`/`C`/`Z`

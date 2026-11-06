@@ -152,22 +152,22 @@ float App::drawChannelHeader(Frame& frame, const std::shared_ptr<ChannelPage>& s
     const float verifiedSpace = channel.verified ? c.dp(kVerifiedGap + kVerifiedSize) : 0;
     const float nameWidth =
         std::min(bold.measure(kNameSize, summary.name).x, textWidth - verifiedSpace);
-    bold.line({textX, nameTop}, nameWidth, kNameSize, theme::kTextPrimary, summary.name);
+    bold.line({textX, nameTop}, nameWidth, kNameSize, theme::g_textPrimary, summary.name);
     if (channel.verified) {
         c.icon(Icon::Verified,
                {textX + nameWidth + c.dp(kVerifiedGap + kVerifiedSize * 0.5f),
                 nameTop + c.lineHeight(kNameSize) * 0.5f},
-               kVerifiedSize, theme::kTextSecondary);
+               kVerifiedSize, theme::g_textSecondary);
     }
     const float handleTop = y + c.dp(kHandleTop);
-    medium.line({textX, handleTop}, textWidth, theme::kCaptionSize, theme::kTextPrimary,
+    medium.line({textX, handleTop}, textWidth, theme::kCaptionSize, theme::g_textPrimary,
                 summary.handle);
     std::string counts = summary.subscribers;
     if (!channel.videoCount.empty()) {
         counts += counts.empty() ? channel.videoCount : " • " + channel.videoCount;
     }
     c.line({textX, handleTop + c.dp(kCountsPitch)}, textWidth, theme::kCaptionSize,
-           theme::kTextSecondary, counts);
+           theme::g_textSecondary, counts);
     page.nameBottom = nameTop + c.lineHeight(kNameSize) - origin.y;
     y += avatar + c.dp(kDescriptionTop);
 
@@ -178,15 +178,15 @@ float App::drawChannelHeader(Frame& frame, const std::shared_ptr<ChannelPage>& s
         const float top = y;
         if (page.descriptionOpen) {
             y += c.paragraph({origin.x + margin, y}, inner, theme::kCaptionSize,
-                             theme::kTextSecondary, channel.description, kAllLines);
+                             theme::g_textSecondary, channel.description, kAllLines);
         } else {
             // A pixel of slack: the measured width alone gets the line cut.
             const float used = std::min(c.measure(theme::kCaptionSize, channel.description).x + 1,
                                         inner - moreWidth - c.dp(4));
-            c.line({origin.x + margin, y}, used, theme::kCaptionSize, theme::kTextSecondary,
+            c.line({origin.x + margin, y}, used, theme::kCaptionSize, theme::g_textSecondary,
                    channel.description);
             medium.text({origin.x + margin + used + c.dp(4), y}, theme::kCaptionSize,
-                        theme::kTextPrimary, more);
+                        theme::g_textPrimary, more);
             y += c.lineHeight(theme::kCaptionSize);
         }
         if (frame.touch.tapped({origin.x, top}, {right, y})) {
@@ -198,9 +198,9 @@ float App::drawChannelHeader(Frame& frame, const std::shared_ptr<ChannelPage>& s
         const float icon = c.dp(kLinkIcon);
         c.icon(Icon::Link,
                {origin.x + margin + icon * 0.5f, y + c.lineHeight(theme::kCaptionSize) * 0.5f},
-               kLinkIcon, theme::kTextPrimary);
+               kLinkIcon, theme::g_textPrimary);
         const float linkX = origin.x + margin + icon + c.dp(kLinkGap);
-        medium.line({linkX, y}, right - margin - linkX, theme::kCaptionSize, theme::kTextPrimary,
+        medium.line({linkX, y}, right - margin - linkX, theme::kCaptionSize, theme::g_textPrimary,
                     channel.links);
         const float bottom = y + c.lineHeight(theme::kCaptionSize);
         if (!channel.linkUrl.empty() && frame.touch.tapped({origin.x, y}, {right, bottom})) {
@@ -215,7 +215,7 @@ float App::drawChannelHeader(Frame& frame, const std::shared_ptr<ChannelPage>& s
     const ImVec2 buttonMin{origin.x + margin, y};
     const ImVec2 buttonMax{right - margin, y + button};
     if (summary.canSubscribe && summary.subscribed) {
-        c.rect(buttonMin, buttonMax, theme::kSurface, kButtonHeight * 0.5f);
+        c.rect(buttonMin, buttonMax, theme::g_surface, kButtonHeight * 0.5f);
         drawPressed(frame, buttonMin, buttonMax, kButtonHeight * 0.5f);
         const std::string_view label = tr(Text::Subscribed);
         const float labelWidth = medium.measure(theme::kBodySize, label).x;
@@ -223,13 +223,13 @@ float App::drawChannelHeader(Frame& frame, const std::shared_ptr<ChannelPage>& s
             c.dp(kBellIcon + kBellGap) + labelWidth + c.dp(kChevronGap + kChevronIcon);
         float x = (buttonMin.x + buttonMax.x - group) * 0.5f;
         const float centerY = y + button * 0.5f;
-        c.icon(Icon::Bell, {x + c.dp(kBellIcon) * 0.5f, centerY}, kBellIcon, theme::kTextPrimary);
+        c.icon(Icon::Bell, {x + c.dp(kBellIcon) * 0.5f, centerY}, kBellIcon, theme::g_textPrimary);
         x += c.dp(kBellIcon + kBellGap);
         medium.text({x, centerY - c.lineHeight(theme::kBodySize) * 0.5f}, theme::kBodySize,
-                    theme::kTextPrimary, label);
+                    theme::g_textPrimary, label);
         x += labelWidth + c.dp(kChevronGap);
         c.icon(Icon::ChevronDown, {x + c.dp(kChevronIcon) * 0.5f, centerY}, kChevronIcon,
-               theme::kTextPrimary);
+               theme::g_textPrimary);
         if (frame.touch.tapped(buttonMin, buttonMax)) {
             toggleSubscription(summary);
         }
@@ -252,7 +252,7 @@ float App::drawChannelTabs(Frame& frame, const std::shared_ptr<ChannelPage>& sha
     const float right = origin.x + width;
     const auto& channel = page.channel;
     float y = origin.y;
-    c.rect(origin, {right, y + c.dp(kTabsHeight)}, theme::kBackground);
+    c.rect(origin, {right, y + c.dp(kTabsHeight)}, theme::g_background);
     // Tabs: words underlined when selected, over a divider, scrolling sideways when they do not
     // fit.
     std::vector<std::pair<Text, std::optional<innertube::ChannelTab>>> tabs{
@@ -281,9 +281,10 @@ float App::drawChannelTabs(Frame& frame, const std::shared_ptr<ChannelPage>& sha
         const std::string_view text = tr(label);
         const float textWidth2 = medium.measure(kTabSize, text).x;
         medium.text({x, y + (row - c.lineHeight(kTabSize)) * 0.5f}, kTabSize,
-                    selected ? theme::kTextPrimary : theme::kTextSecondary, text);
+                    selected ? theme::g_textPrimary : theme::g_textSecondary, text);
         if (selected) {
-            c.rect({x, y + row - c.dp(kUnderline)}, {x + textWidth2, y + row}, theme::kTextPrimary);
+            c.rect({x, y + row - c.dp(kUnderline)}, {x + textWidth2, y + row},
+                   theme::g_textPrimary);
         }
         const float spacing = c.dp(kTabSpacing);
         if (frame.touch.tapped({x - spacing * 0.5f, y},
@@ -301,7 +302,7 @@ float App::drawChannelTabs(Frame& frame, const std::shared_ptr<ChannelPage>& sha
     page.tabsWidth = x - start - c.dp(kTabSpacing) + margin * 2;
     c.list()->PopClipRect();
     y += row;
-    c.rect({origin.x, y}, {right, y + std::max(1.0f, c.dp(0.4f))}, theme::kDivider);
+    c.rect({origin.x, y}, {right, y + std::max(1.0f, c.dp(0.4f))}, theme::g_divider);
     return y - origin.y + c.dp(1);
 }
 
@@ -309,9 +310,9 @@ void App::drawChannelBar(Frame& frame, const ChannelPage& page, ImVec2 origin, f
                          bool named) {
     const Canvas& c = frame.canvas;
     const float height = m_insets.top + c.dp(theme::kTopBarHeight);
-    c.rect(origin, {origin.x + width, origin.y + height}, theme::kBackground);
+    c.rect(origin, {origin.x + width, origin.y + height}, theme::g_background);
     const float centerY = origin.y + m_insets.top + c.dp(theme::kTopBarHeight) * 0.5f;
-    if (iconButton(frame, Icon::Back, {origin.x + c.dp(kBackX), centerY}, theme::kTextPrimary)) {
+    if (iconButton(frame, Icon::Back, {origin.x + c.dp(kBackX), centerY}, theme::g_textPrimary)) {
         later([this] { goBack(); });
     }
     // The name shows once the header's has scrolled away.
@@ -320,15 +321,15 @@ void App::drawChannelBar(Frame& frame, const ChannelPage& page, ImVec2 origin, f
         c.with(theme::kHeadingWeight)
             .line({textX, centerY - c.lineHeight(theme::kSectionSize) * 0.5f},
                   origin.x + width - c.dp(kSearchRight + 24) - textX, theme::kSectionSize,
-                  theme::kTextPrimary, page.channel.summary.name);
+                  theme::g_textPrimary, page.channel.summary.name);
     }
     if (iconButton(frame, Icon::Search, {origin.x + width - c.dp(kSearchRight), centerY},
-                   theme::kTextPrimary)) {
+                   theme::g_textPrimary)) {
         later([this] { openSearch(); });
     }
     // More: sharing the channel, the official menu's main entry.
     if (iconButton(frame, Icon::MoreVertical, {origin.x + width - c.dp(kMoreRight), centerY},
-                   theme::kTextPrimary)) {
+                   theme::g_textPrimary)) {
         const auto& summary = page.channel.summary;
         m_platform.share(summary.name, summary.handle.empty()
                                            ? std::format("{}{}", kChannelLink, summary.id)
@@ -492,13 +493,13 @@ void App::drawChannelHome(Frame& frame, const std::shared_ptr<ChannelPage>& page
         const float titleY = y + c.dp(kSectionTitleTop);
         const auto& title = shelves[i].title;
         heading.line({min.x + margin, titleY}, width - margin * 2, theme::kSectionSize,
-                     theme::kTextPrimary, title);
+                     theme::g_textPrimary, title);
         if (style == Style::Rows) {
             const float titleWidth = heading.measure(theme::kSectionSize, title).x;
             const ImVec2 chevron{min.x + margin + titleWidth + c.dp(kSectionChevron) * 0.5f +
                                      c.dp(6),
                                  titleY + c.lineHeight(theme::kSectionSize) * 0.5f};
-            c.icon(Icon::ChevronRight, chevron, kSectionChevron, theme::kTextPrimary);
+            c.icon(Icon::ChevronRight, chevron, kSectionChevron, theme::g_textPrimary);
             if (!moving &&
                 frame.touch.tapped({min.x, y}, {chevron.x + c.dp(16), y + c.dp(kSectionHeight)})) {
                 later([this, page] {
@@ -539,10 +540,10 @@ void App::drawChannelHome(Frame& frame, const std::shared_ptr<ChannelPage>& page
                 const float menu = c.dp(theme::kIconSize);
                 const float titleHeight =
                     bold.paragraph({x, textY}, bigWidth - menu, theme::kTitleSize,
-                                   theme::kTextPrimary, item.title, 2);
+                                   theme::g_textPrimary, item.title, 2);
                 const ImVec2 dots{x + bigWidth - menu * 0.3f,
                                   textY + c.lineHeight(theme::kTitleSize) * 0.5f};
-                c.icon(Icon::MoreHorizontal, dots, 18, theme::kTextPrimary);
+                c.icon(Icon::MoreHorizontal, dots, 18, theme::g_textPrimary);
                 drawCompactMeta(frame, item, {}, {x, textY + titleHeight + c.dp(kMetaTop)},
                                 bigWidth - menu);
                 if (moving || feed->scroller.moving()) {
@@ -575,11 +576,11 @@ void App::drawChannelHome(Frame& frame, const std::shared_ptr<ChannelPage>& page
                 drawDurationBadge(frame, item.badge, thumbMax);
                 const float textWidth = menuX - c.dp(14) - textX;
                 const float titleHeight = c.paragraph({textX, top}, textWidth, kRowTitleSize,
-                                                      theme::kTextPrimary, item.title, 2);
+                                                      theme::g_textPrimary, item.title, 2);
                 c.line({textX, top + titleHeight + c.dp(2)}, textWidth, theme::kCaptionSize,
-                       theme::kTextSecondary, compactDetail(item.detail));
+                       theme::g_textSecondary, compactDetail(item.detail));
                 c.icon(Icon::MoreHorizontal, {menuX, top + c.lineHeight(kRowTitleSize) * 0.5f}, 16,
-                       theme::kTextPrimary);
+                       theme::g_textPrimary);
                 if (moving) {
                     continue;
                 }
@@ -593,7 +594,7 @@ void App::drawChannelHome(Frame& frame, const std::shared_ptr<ChannelPage>& page
                 const ImVec2 more{min.x + width * 0.5f,
                                   y + c.dp(kRowPitch) * static_cast<float>(rows) +
                                       c.dp(kExpandHeight) * 0.5f - c.dp(12)};
-                c.icon(Icon::ChevronDown, more, 24, theme::kTextPrimary);
+                c.icon(Icon::ChevronDown, more, 24, theme::g_textPrimary);
                 if (!moving &&
                     frame.touch.tapped({min.x, more.y - c.dp(20)}, {max.x, more.y + c.dp(20)})) {
                     page->expanded[i] = true;
@@ -632,10 +633,10 @@ void App::drawChannelHome(Frame& frame, const std::shared_ptr<ChannelPage>& page
                     c.with(Weight::Medium)
                         .line({x + c.dp(8),
                                top + cellHeight - c.dp(8) - c.lineHeight(theme::kCaptionSize)},
-                              cell - c.dp(16), theme::kCaptionSize, theme::kTextPrimary, views);
+                              cell - c.dp(16), theme::kCaptionSize, IM_COL32_WHITE, views);
                 }
                 c.icon(Icon::MoreHorizontal, {x + cell - c.dp(14), top + c.dp(12)}, 16,
-                       theme::kTextPrimary);
+                       IM_COL32_WHITE);
                 if (!moving && frame.touch.tapped({x, top}, {x + cell, top + cellHeight})) {
                     open(index);
                 }

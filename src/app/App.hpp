@@ -198,6 +198,8 @@ public:
     void onWindowCreated(ANativeWindow* window);
     void onWindowDestroyed();
     void onInsetsChanged();
+    // Settings::appearance, or the phone's dark mode when it is left to follow it.
+    void applyAppearance();
     void onPause();
     // The app left the screen (not for picture-in-picture).
     void onStop();
@@ -316,6 +318,24 @@ private:
         ImVec2 burstCentre{};
     };
 
+    // The listening screen of voice search, over everything else while open.
+    struct VoiceSearchState {
+        enum class Phase : std::uint8_t {
+            Starting,  // Waiting for the microphone (or its permission).
+            Listening, // The microphone is open.
+            NoMatch,   // Nothing understood: tapping the microphone listens again.
+            Denied,    // No microphone permission.
+            Failed,    // The recognition service failed.
+        };
+
+        bool open = false;
+        Phase phase = Phase::Starting;
+        std::string heard;           // The words so far.
+        float levelDb = 0;           // Last level reported by the recognizer.
+        float level = 0;             // Shown level, 0 to 1, eased towards levelDb.
+        bool resumePlayback = false; // A video was paused for the microphone.
+    };
+
     struct Toast {
         std::string text;
         double shownAt = -1;
@@ -333,6 +353,7 @@ private:
     void syncPlayback();
     // Plays the next video once one ends: after a countdown on screen, at once otherwise.
     void updateAutoplay();
+    void reportPlayback(); // Adds what is playing to the account's history, once it has started.
     void playNext();
     void drawAutoplay(Frame& frame, ImVec2 min, ImVec2 max);
     // Picture-in-picture: only the video, filling the window.
@@ -368,6 +389,11 @@ private:
     void submitSearch(Screen& screen, std::string query);
     // submitSearch on the search screen, if it is still the one shown.
     void searchFor(const std::string& query);
+    // Voice search (VoiceSearchPage.cpp).
+    void openVoiceSearch();
+    void closeVoiceSearch();
+    void onVoiceEvent(const BridgeEvent& event);
+    void drawVoiceSearch(Frame& frame, ImVec2 display);
     void requestSuggestions(const std::string& query);
     void drawSearchSuggestions(Frame& frame, ImVec2 min, ImVec2 max);
     [[nodiscard]] float drawSearchFilters(Frame& frame, Screen& screen, ImVec2 origin, float width);
@@ -624,12 +650,14 @@ private:
     innertube::SearchFilters m_filters;
     bool m_filtersOpen = false;
     float m_searchFiltersHeight = 0; // Measured on the previous frame.
+    std::string m_reportedVideo;     // Last video added to the account's history.
     WatchState m_watch;
     SignInState m_signIn;
     SheetState m_sheet;
     SaveState m_save;
     DownloadSheetState m_downloadSheet;
     Toast m_toast;
+    VoiceSearchState m_voice;
     ShortsState m_shorts;
     std::shared_ptr<PostFeed> m_posts = std::make_shared<PostFeed>();
     MiniPlayerState m_mini;

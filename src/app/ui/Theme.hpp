@@ -4,29 +4,142 @@
 
 #include <imgui.h>
 
-// Visual constants. Colours were sampled from reference screenshots of the official app's dark
-// theme; dimensions are in density-independent pixels (dp) or scale-independent pixels (sp).
+// Visual constants. The dark colours were sampled from reference screenshots of the official app's
+// dark theme; dimensions are in density-independent pixels (dp) or scale-independent pixels (sp).
 namespace sloptube::app::theme {
 
-inline constexpr ImU32 kBackground = IM_COL32(0x0f, 0x0f, 0x0f, 0xff);
-inline constexpr ImU32 kSurface = IM_COL32(0x27, 0x27, 0x27, 0xff);
-inline constexpr ImU32 kSurfaceRaised = IM_COL32(0x21, 0x21, 0x21, 0xff); // Bottom sheets.
-inline constexpr ImU32 kToast = IM_COL32(0xf1, 0xf1, 0xf1, 0xf0);
-inline constexpr ImU32 kSurfacePressed = IM_COL32(0x3f, 0x3f, 0x3f, 0xff);
-inline constexpr ImU32 kPlaceholder = IM_COL32(0x1f, 0x1f, 0x1f, 0xff);
-inline constexpr ImU32 kTextPrimary = IM_COL32(0xf1, 0xf1, 0xf1, 0xff);
-inline constexpr ImU32 kTextSecondary = IM_COL32(0xaa, 0xaa, 0xaa, 0xff);
-inline constexpr ImU32 kTextOnLight = IM_COL32(0x0f, 0x0f, 0x0f, 0xff);
+// The colours that change with the appearance.
+struct Palette {
+    ImU32 background;
+    ImU32 surface;
+    ImU32 surfaceRaised; // Bottom sheets.
+    ImU32 toast;
+    ImU32 surfacePressed;
+    ImU32 placeholder;
+    ImU32 textPrimary;
+    ImU32 textSecondary;
+    ImU32 textOnLight; // Over a fill of textPrimary or toast.
+    ImU32 link;
+    // Measured on the official app (Galaxy A14): the 1 dp border of outlined buttons ("Accounts",
+    // the second profile button).
+    ImU32 outline;
+    ImU32 divider;
+    ImU32 track;
+    ImU32 ripple;
+    ImU32 shimmer;
+    ImU32 sheetHandle;
+};
+
+// The packaging script reads `background` here for the colour of the Android window.
+inline constexpr Palette kDarkPalette{
+    .background = IM_COL32(0x0f, 0x0f, 0x0f, 0xff),
+    .surface = IM_COL32(0x27, 0x27, 0x27, 0xff),
+    .surfaceRaised = IM_COL32(0x21, 0x21, 0x21, 0xff),
+    .toast = IM_COL32(0xf1, 0xf1, 0xf1, 0xf0),
+    .surfacePressed = IM_COL32(0x3f, 0x3f, 0x3f, 0xff),
+    .placeholder = IM_COL32(0x1f, 0x1f, 0x1f, 0xff),
+    .textPrimary = IM_COL32(0xf1, 0xf1, 0xf1, 0xff),
+    .textSecondary = IM_COL32(0xaa, 0xaa, 0xaa, 0xff),
+    .textOnLight = IM_COL32(0x0f, 0x0f, 0x0f, 0xff),
+    .link = IM_COL32(0x3e, 0xa6, 0xff, 0xff),
+    .outline = IM_COL32(0x4c, 0x4c, 0x4c, 0xff),
+    .divider = IM_COL32(0xff, 0xff, 0xff, 0x1a),
+    .track = IM_COL32(0xff, 0xff, 0xff, 0x4d),
+    .ripple = IM_COL32(0xff, 0xff, 0xff, 0x24),
+    .shimmer = IM_COL32(0xff, 0xff, 0xff, 0x10),
+    .sheetHandle = IM_COL32(0xff, 0xff, 0xff, 0x40),
+};
+
+inline constexpr Palette kLightPalette{
+    .background = IM_COL32(0xff, 0xff, 0xff, 0xff),
+    .surface = IM_COL32(0xf2, 0xf2, 0xf2, 0xff),
+    .surfaceRaised = IM_COL32(0xff, 0xff, 0xff, 0xff),
+    .toast = IM_COL32(0x0f, 0x0f, 0x0f, 0xf0),
+    .surfacePressed = IM_COL32(0xe5, 0xe5, 0xe5, 0xff),
+    .placeholder = IM_COL32(0xf2, 0xf2, 0xf2, 0xff),
+    .textPrimary = IM_COL32(0x0f, 0x0f, 0x0f, 0xff),
+    .textSecondary = IM_COL32(0x60, 0x60, 0x60, 0xff),
+    .textOnLight = IM_COL32(0xff, 0xff, 0xff, 0xff),
+    .link = IM_COL32(0x06, 0x5f, 0xd4, 0xff),
+    .outline = IM_COL32(0xd0, 0xd0, 0xd0, 0xff),
+    .divider = IM_COL32(0x00, 0x00, 0x00, 0x1a),
+    .track = IM_COL32(0x00, 0x00, 0x00, 0x33),
+    .ripple = IM_COL32(0x00, 0x00, 0x00, 0x1a),
+    .shimmer = IM_COL32(0x00, 0x00, 0x00, 0x0c),
+    .sheetHandle = IM_COL32(0x00, 0x00, 0x00, 0x33),
+};
+
+// The colours in use, dark until apply() says otherwise. Written once per change, on the main
+// thread, and read like constants everywhere else.
+inline ImU32 g_background = kDarkPalette.background;
+inline ImU32 g_surface = kDarkPalette.surface;
+inline ImU32 g_surfaceRaised = kDarkPalette.surfaceRaised;
+inline ImU32 g_toast = kDarkPalette.toast;
+inline ImU32 g_surfacePressed = kDarkPalette.surfacePressed;
+inline ImU32 g_placeholder = kDarkPalette.placeholder;
+inline ImU32 g_textPrimary = kDarkPalette.textPrimary;
+inline ImU32 g_textSecondary = kDarkPalette.textSecondary;
+inline ImU32 g_textOnLight = kDarkPalette.textOnLight;
+inline ImU32 g_link = kDarkPalette.link;
+inline ImU32 g_outline = kDarkPalette.outline;
+inline ImU32 g_divider = kDarkPalette.divider;
+inline ImU32 g_track = kDarkPalette.track;
+inline ImU32 g_ripple = kDarkPalette.ripple;
+inline ImU32 g_shimmer = kDarkPalette.shimmer;
+inline ImU32 g_sheetHandle = kDarkPalette.sheetHandle;
+inline bool g_isDark = true;
+
+inline void apply(bool dark) {
+    const Palette& palette = dark ? kDarkPalette : kLightPalette;
+    g_isDark = dark;
+    g_background = palette.background;
+    g_surface = palette.surface;
+    g_surfaceRaised = palette.surfaceRaised;
+    g_toast = palette.toast;
+    g_surfacePressed = palette.surfacePressed;
+    g_placeholder = palette.placeholder;
+    g_textPrimary = palette.textPrimary;
+    g_textSecondary = palette.textSecondary;
+    g_textOnLight = palette.textOnLight;
+    g_link = palette.link;
+    g_outline = palette.outline;
+    g_divider = palette.divider;
+    g_track = palette.track;
+    g_ripple = palette.ripple;
+    g_shimmer = palette.shimmer;
+    g_sheetHandle = palette.sheetHandle;
+}
+
+// While alive (and `active`), the dark colours are in use whatever the appearance: for what is
+// drawn over video, which stays dark as in the official app.
+class DarkScope {
+public:
+    explicit DarkScope(bool active = true)
+        : m_wasDark(g_isDark) {
+        if (active && !g_isDark) {
+            apply(true);
+        }
+    }
+
+    ~DarkScope() {
+        if (g_isDark != m_wasDark) {
+            apply(m_wasDark);
+        }
+    }
+
+    DarkScope(const DarkScope&) = delete;
+    DarkScope& operator=(const DarkScope&) = delete;
+
+private:
+    bool m_wasDark;
+};
+
+// The same in both appearances: these sit over images and video.
 inline constexpr ImU32 kAccent = IM_COL32(0xff, 0x00, 0x33, 0xff);
-inline constexpr ImU32 kLink = IM_COL32(0x3e, 0xa6, 0xff, 0xff);
-// Measured on the official app (Galaxy A14): the unread count on the bell, and the 1 dp border of
-// outlined buttons ("Accounts", the second profile button).
+// Measured on the official app (Galaxy A14): the unread count on the bell.
 inline constexpr ImU32 kBadgeRed = IM_COL32(0xe1, 0x00, 0x2d, 0xff);
-inline constexpr ImU32 kOutline = IM_COL32(0x4c, 0x4c, 0x4c, 0xff);
 inline constexpr ImU32 kBadge = IM_COL32(0x00, 0x00, 0x00, 0xcc);
 inline constexpr ImU32 kScrim = IM_COL32(0x00, 0x00, 0x00, 0x66);
-inline constexpr ImU32 kDivider = IM_COL32(0xff, 0xff, 0xff, 0x1a);
-inline constexpr ImU32 kTrack = IM_COL32(0xff, 0xff, 0xff, 0x4d);
 // Round buttons and labels over the video (the official app's white at 30 %).
 inline constexpr ImU32 kOverlayButton = IM_COL32(0xff, 0xff, 0xff, 0x4d);
 

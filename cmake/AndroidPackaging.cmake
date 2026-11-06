@@ -59,9 +59,9 @@ function(sloptube_configure_resources out_dir)
     set(LOGO_GRADIENT "<gradient ${gradient} />")
 
     file(READ "${theme}" theme_source)
-    string(REGEX MATCH "kBackground = IM_COL32\\(0x(..), 0x(..), 0x(..)" match "${theme_source}")
+    string(REGEX MATCH "\\.background = IM_COL32\\(0x(..), 0x(..), 0x(..)" match "${theme_source}")
     if(NOT match)
-        message(FATAL_ERROR "kBackground not found in ${theme}")
+        message(FATAL_ERROR "background not found in ${theme}")
     endif()
     set(SLOPTUBE_BACKGROUND "#${CMAKE_MATCH_1}${CMAKE_MATCH_2}${CMAKE_MATCH_3}")
 

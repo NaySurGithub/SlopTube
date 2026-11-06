@@ -200,6 +200,31 @@ void Platform::setFullscreen(bool fullscreen) {
     }
 }
 
+void Platform::setLightSystemBars(bool statusBar, bool navigationBar) {
+    constexpr jint kLightStatusBars = 1 << 3;     // APPEARANCE_LIGHT_STATUS_BARS.
+    constexpr jint kLightNavigationBars = 1 << 4; // APPEARANCE_LIGHT_NAVIGATION_BARS.
+    const jint light =
+        (statusBar ? kLightStatusBars : 0) | (navigationBar ? kLightNavigationBars : 0);
+    if (light == m_lightSystemBars) {
+        return;
+    }
+    m_lightSystemBars = light;
+    const LocalFrame frame(m_env);
+    jobject view = window();
+    jobject controller =
+        m_env->CallObjectMethod(view, method(m_env, view, "getInsetsController",
+                                             "()Landroid/view/WindowInsetsController;"));
+    if (controller == nullptr) {
+        return;
+    }
+    m_env->CallVoidMethod(controller, method(m_env, controller, "setSystemBarsAppearance", "(II)V"),
+                          light, kLightStatusBars | kLightNavigationBars);
+    if (m_env->ExceptionCheck()) {
+        m_env->ExceptionDescribe();
+        m_env->ExceptionClear();
+    }
+}
+
 void Platform::haptic(Haptic haptic) {
     const LocalFrame frame(m_env);
     if (haptic == Haptic::LongPress || haptic == Haptic::ContextClick) {
@@ -373,10 +398,30 @@ void Platform::installUpdate(const std::filesystem::path& apk) {
                           javaString(m_env, apk.string()));
 }
 
-void Platform::startVoiceSearch() {
+bool Platform::startVoiceSearch() {
     const LocalFrame frame(m_env);
     jobject activity = m_app->activity->clazz;
-    m_env->CallVoidMethod(activity, method(m_env, activity, "startVoiceSearch", "()V"));
+    const bool listening =
+        m_env->CallBooleanMethod(activity, method(m_env, activity, "startVoiceSearch", "()Z")) ==
+        JNI_TRUE;
+    if (m_env->ExceptionCheck()) {
+        m_env->ExceptionDescribe();
+        m_env->ExceptionClear();
+        return false;
+    }
+    return listening;
+}
+
+void Platform::finishVoiceSearch() {
+    const LocalFrame frame(m_env);
+    jobject activity = m_app->activity->clazz;
+    m_env->CallVoidMethod(activity, method(m_env, activity, "finishVoiceSearch", "()V"));
+}
+
+void Platform::cancelVoiceSearch() {
+    const LocalFrame frame(m_env);
+    jobject activity = m_app->activity->clazz;
+    m_env->CallVoidMethod(activity, method(m_env, activity, "cancelVoiceSearch", "()V"));
 }
 
 innertube::Locale Platform::locale() const {
@@ -392,6 +437,10 @@ innertube::Locale Platform::locale() const {
         locale.region.assign(country.data(), country.size());
     }
     return locale;
+}
+
+bool Platform::darkMode() const {
+    return AConfiguration_getUiModeNight(m_app->config) == ACONFIGURATION_UI_MODE_NIGHT_YES;
 }
 
 float Platform::density() const {
@@ -458,15 +507,24 @@ jobject Platform::vibrator() {
 }
 
 jstring Platform::codepointString(char32_t codepoint) {
-    std::array<jchar, 2> units{};
-    jsize length = 1;
-    if (codepoint > 0xFFFF) {
-        const char32_t offset = codepoint - 0x10000;
-        units = {static_cast<jchar>(0xD800 + (offset >> 10)),
-                 static_cast<jchar>(0xDC00 + (offset & 0x3FF))};
-        length = 2;
+    std::array<jchar, 4> units{};
+    jsize length = 0;
+    const auto append = [&](char32_t c) {
+        if (c > 0xFFFF) {
+            const char32_t offset = c - 0x10000;
+            units[static_cast<std::size_t>(length++)] = static_cast<jchar>(0xD800 + (offset >> 10));
+            units[static_cast<std::size_t>(length++)] =
+                static_cast<jchar>(0xDC00 + (offset & 0x3FF));
+        } else {
+            units[static_cast<std::size_t>(length++)] = static_cast<jchar>(c);
+        }
+    };
+    if (codepoint >= kFlagFirst && codepoint <= kFlagLast) {
+        const char32_t pair = codepoint - kFlagFirst;
+        append(kRegionalIndicatorA + pair / kRegionalIndicators);
+        append(kRegionalIndicatorA + pair % kRegionalIndicators);
     } else {
-        units[0] = static_cast<jchar>(codepoint);
+        append(codepoint);
     }
     return m_env->NewString(units.data(), length);
 }

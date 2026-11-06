@@ -55,6 +55,21 @@ void JNICALL voiceSearch(JNIEnv* env, jclass, jstring query) {
     dispatch({.kind = BridgeEvent::Kind::VoiceSearch, .query = nativeString(env, query)});
 }
 
+void JNICALL voicePartial(JNIEnv* env, jclass, jstring heard) {
+    dispatch({.kind = BridgeEvent::Kind::VoicePartial, .query = nativeString(env, heard)});
+}
+
+void JNICALL voiceLevel(JNIEnv*, jclass, jfloat rmsDb) {
+    dispatch({.kind = BridgeEvent::Kind::VoiceLevel, .levelDb = rmsDb});
+}
+
+void JNICALL voiceState(JNIEnv*, jclass, jint state) {
+    if (state < 0 || state > static_cast<jint>(VoiceState::Stopped)) {
+        return;
+    }
+    dispatch({.kind = BridgeEvent::Kind::VoiceState, .voice = static_cast<VoiceState>(state)});
+}
+
 void JNICALL pictureInPictureDismissed(JNIEnv*, jclass) {
     dispatch({.kind = BridgeEvent::Kind::PictureInPictureDismissed});
 }
@@ -216,6 +231,10 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void*) {
                         reinterpret_cast<void*>(&updateFailed)},
         JNINativeMethod{"nativeVoiceSearch", "(Ljava/lang/String;)V",
                         reinterpret_cast<void*>(&voiceSearch)},
+        JNINativeMethod{"nativeVoicePartial", "(Ljava/lang/String;)V",
+                        reinterpret_cast<void*>(&voicePartial)},
+        JNINativeMethod{"nativeVoiceLevel", "(F)V", reinterpret_cast<void*>(&voiceLevel)},
+        JNINativeMethod{"nativeVoiceState", "(I)V", reinterpret_cast<void*>(&voiceState)},
     };
     const std::array service{
         JNINativeMethod{"nativeMediaCommand", "(IJ)V", reinterpret_cast<void*>(&mediaCommand)},
