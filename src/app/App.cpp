@@ -1156,12 +1156,13 @@ void App::drawTab(Frame& frame, ImVec2 min, ImVec2 max) {
     }
     const float topShift = m_barShift;
     const float navShift = bar > 0 ? m_barShift / bar * nav : 0;
-    // Taps and drags starting on a bar are the bar's.
+    // Taps and drags starting on a bar are the bar's. Not only while the finger is down: a tap
+    // lands on the frame it lifts, and the feed under the bar would take it.
     Touch& touch = frame.touch;
     const bool wasBlocked = touch.blocked();
     const ImVec2 start = touch.start();
     const bool onBars = start.y < min.y + bar - topShift || start.y >= contentMax.y + navShift;
-    if (collapsing && touch.down() && onBars) {
+    if (collapsing && onBars) {
         touch.setBlocked(true);
     }
 
