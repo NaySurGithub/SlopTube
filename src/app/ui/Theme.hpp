@@ -50,6 +50,9 @@ inline constexpr Palette kDarkPalette{
     .sheetHandle = IM_COL32(0xff, 0xff, 0xff, 0x40),
 };
 
+// The official app's light theme, from its colour resources (yt_sys_color_baseline_light_*):
+// base and raised backgrounds white, the additive background (5 % black) under chips and fields,
+// text #0f0f0f and #606060, call to action #065fd4, outline 10 % black.
 inline constexpr Palette kLightPalette{
     .background = IM_COL32(0xff, 0xff, 0xff, 0xff),
     .surface = IM_COL32(0xf2, 0xf2, 0xf2, 0xff),
@@ -61,7 +64,7 @@ inline constexpr Palette kLightPalette{
     .textSecondary = IM_COL32(0x60, 0x60, 0x60, 0xff),
     .textOnLight = IM_COL32(0xff, 0xff, 0xff, 0xff),
     .link = IM_COL32(0x06, 0x5f, 0xd4, 0xff),
-    .outline = IM_COL32(0xd0, 0xd0, 0xd0, 0xff),
+    .outline = IM_COL32(0x00, 0x00, 0x00, 0x1a),
     .divider = IM_COL32(0x00, 0x00, 0x00, 0x1a),
     .track = IM_COL32(0x00, 0x00, 0x00, 0x33),
     .ripple = IM_COL32(0x00, 0x00, 0x00, 0x1a),
