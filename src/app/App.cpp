@@ -18,6 +18,7 @@
 #include <imgui_internal.h>
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <format>
 #include <ranges>
@@ -93,6 +94,16 @@ constexpr ImU32 kDisabledControl = IM_COL32(0xff, 0xff, 0xff, 0x4d);
 constexpr float kHoldSeconds = 0.4f; // Press duration that starts the speed-up.
 constexpr float kHeldSpeed = 2;
 constexpr float kSpeedPillTop = 16; // dp from the top of the video.
+// Double-tap seeking, as in the official app.
+constexpr std::int64_t kTapSeekMs = 10000; // Each tap of the streak.
+constexpr float kTapSeekZone = 0.4f;       // Fraction of the width on each side that seeks.
+constexpr double kTapSeekStreak = 0.7;     // Seconds in which one more tap seeks again.
+constexpr float kTapSeekChevron = 10;      // dp
+constexpr float kTapSeekChevronGap = 4;    // dp
+constexpr float kTapSeekLabelGap = 8;      // dp between the chevrons and the label.
+constexpr float kTapSeekCycle = 0.75f;     // Seconds for the light to run through the chevrons.
+constexpr float kTapSeekDim = 0.3f;        // Opacity of an unlit chevron.
+constexpr ImU32 kTapSeekFill = IM_COL32(0xff, 0xff, 0xff, 0x26);
 // Fullscreen pinch, as in the official app: a pinch settling near the zoom that fills the screen
 // snaps to it, one settling nearer the fitted size goes back to it, any other zoom stays.
 constexpr float kMaxZoom = 8;            // Times the fitted size.
@@ -1719,6 +1730,43 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
         m_watch.fineMs = std::clamp<std::int64_t>(m_watch.fineMs, 0, durationMs);
     }
 
+    // The autoplay countdown replaces the controls once the video has ended.
+    const bool autoplaying = m_watch.endedAt >= 0 && m_settings.autoplay &&
+                             !m_watch.autoplayCancelled && nextVideo().has_value();
+
+    // A second tap soon after one on a side of the video seeks 10 s, and every tap of the streak
+    // 10 s more, as in the official app. It is asked before the controls, which the first tap
+    // may have shown under the finger.
+    TapSeekState& tapSeek = m_watch.tapSeek;
+    const bool streak = tapSeek.taps > 0 && frame.time - tapSeek.seekAt < kTapSeekStreak;
+    const bool secondTap =
+        tapSeek.firstTapAt >= 0 && frame.time - tapSeek.firstTapAt < theme::kDoubleTap;
+    const float tapZone = width * kTapSeekZone;
+    if (durationMs > 0 && !m_watch.fine && !m_watch.seek && !autoplaying && (streak || secondTap)) {
+        int side = 0;
+        if (m_touch.tapped(min, {min.x + tapZone, max.y})) {
+            side = -1;
+        } else if (m_touch.tapped({max.x - tapZone, min.y}, max)) {
+            side = 1;
+        }
+        if (side != 0) {
+            if (!streak || side != tapSeek.side) {
+                tapSeek = {.startedAt = frame.time, .side = side, .targetMs = playedMs};
+            }
+            ++tapSeek.taps;
+            tapSeek.seekAt = frame.time;
+            tapSeek.firstTapAt = -1;
+            tapSeek.targetMs =
+                std::clamp<std::int64_t>(tapSeek.targetMs + side * kTapSeekMs, 0, durationMs);
+            if (live) {
+                seekLive(tapSeek.targetMs);
+            } else {
+                m_player.seek(tapSeek.targetMs * 1000);
+            }
+            m_watch.controlsVisible = false;
+        }
+    }
+
     // While seeking, the official app shows the storyboard frame at the finger over the video,
     // with the time in a pill, and hides every other control.
     const bool seeking = m_watch.seek.has_value();
@@ -1745,9 +1793,6 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
                    tr(Text::PullUpForPrecise), TextAlign::Center);
         }
     }
-    // The autoplay countdown replaces the controls once the video has ended.
-    const bool autoplaying = m_watch.endedAt >= 0 && m_settings.autoplay &&
-                             !m_watch.autoplayCancelled && nextVideo().has_value();
     if (autoplaying) {
         drawAutoplay(frame, min, max);
     } else if (m_watch.controlsVisible && !hideControls) {
@@ -1849,6 +1894,9 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
             m_watch.controlsShownAt = frame.time;
         }
     }
+    if (tapSeek.taps > 0) {
+        drawTapSeek(frame, min, max);
+    }
     if (loading) {
         c.spinner(center, theme::kSpinnerSize * 1.4f, theme::g_textPrimary, frame.time);
         frame.animating = true;
@@ -1859,8 +1907,55 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
     if (m_touch.tapped(min, max) && !m_watch.fine) {
         m_watch.controlsVisible = !m_watch.controlsVisible;
         m_watch.controlsShownAt = frame.time;
+        const float x = m_touch.position().x;
+        tapSeek.firstTapAt = x < min.x + tapZone || x > max.x - tapZone ? frame.time : -1;
     }
     // While playing, video frames wake the loop: the clock and the auto-hide follow them.
+}
+
+// The official app's double-tap seek: the tapped side lit under an arc, three chevrons lit in
+// turn towards the seek, and how far the streak went.
+void App::drawTapSeek(Frame& frame, ImVec2 min, ImVec2 max) {
+    TapSeekState& tapSeek = m_watch.tapSeek;
+    const float alpha =
+        1 - motion::progress(frame.time, tapSeek.seekAt + kTapSeekStreak, motion::kFadeDuration);
+    if (alpha <= 0) {
+        tapSeek.taps = 0;
+        return;
+    }
+    frame.animating = true;
+    const Canvas& c = frame.canvas;
+    ImDrawList* list = c.list();
+    const float zone = (max.x - min.x) * kTapSeekZone;
+    const float radius = std::max(max.y - min.y, zone);
+    const float side = static_cast<float>(tapSeek.side);
+    const float centreY = (min.y + max.y) * 0.5f;
+    // A circle reaching past the edge, so only its arc shows.
+    const float circleX = side < 0 ? min.x + zone - radius : max.x - zone + radius;
+    list->AddCircleFilled({circleX, centreY}, radius, motion::withAlpha(kTapSeekFill, alpha), 96);
+
+    const float zoneCentre = side < 0 ? min.x + zone * 0.5f : max.x - zone * 0.5f;
+    const float size = c.dp(kTapSeekChevron);
+    const float labelHeight = c.lineHeight(theme::kCaptionSize);
+    const float chevronY = centreY - (labelHeight + c.dp(kTapSeekLabelGap)) * 0.5f;
+    const float phase =
+        std::fmod(static_cast<float>(frame.time - tapSeek.startedAt), kTapSeekCycle) /
+        kTapSeekCycle;
+    constexpr int kChevrons = 3;
+    for (int i = 0; i < kChevrons; ++i) {
+        const int order = side < 0 ? kChevrons - 1 - i : i;
+        const float lit = std::max(
+            kTapSeekDim, 1 - std::abs(phase * kChevrons - (static_cast<float>(order) + 0.5f)));
+        const float x = zoneCentre + static_cast<float>(i - 1) * (size + c.dp(kTapSeekChevronGap));
+        const float back = x - side * size * 0.5f;
+        list->AddTriangleFilled({x + side * size * 0.5f, chevronY}, {back, chevronY - size * 0.5f},
+                                {back, chevronY + size * 0.5f},
+                                motion::withAlpha(theme::g_textPrimary, alpha * lit));
+    }
+    const int seconds = tapSeek.taps * static_cast<int>(kTapSeekMs / 1000);
+    c.line({zoneCentre - zone * 0.5f, chevronY + size * 0.5f + c.dp(kTapSeekLabelGap)}, zone,
+           theme::kCaptionSize, motion::withAlpha(theme::g_textPrimary, alpha),
+           std::vformat(tr(Text::SeekSeconds), std::make_format_args(seconds)), TextAlign::Center);
 }
 
 bool App::holdForSpeed(Frame& frame, ImVec2 min, ImVec2 max, float pillTop) {

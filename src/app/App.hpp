@@ -227,6 +227,16 @@ private:
         std::size_t chapter = 0; // Under the target, to tick when it changes.
     };
 
+    // Double tap on a side of the video: the first tap, then each tap of the streak seeking 10 s.
+    struct TapSeekState {
+        double firstTapAt = -1;    // A tap on a side that a second one would turn into a seek.
+        double seekAt = -1;        // Last seek of the streak.
+        double startedAt = -1;     // First seek of the streak, for the chevrons' animation.
+        int side = 0;              // -1 rewinds, 1 skips ahead.
+        int taps = 0;              // Seeks of the streak; the overlay shows while non-zero.
+        std::int64_t targetMs = 0; // Where the streak has taken playback.
+    };
+
     struct WatchState {
         innertube::Item item;
         VideoSource source;
@@ -234,7 +244,8 @@ private:
         std::string error;
         bool controlsVisible = true;
         double controlsShownAt = 0;
-        std::optional<SeekState> seek;    // While a drag seeks.
+        std::optional<SeekState> seek; // While a drag seeks.
+        TapSeekState tapSeek;
         bool fine = false;                // Precise seeking open; stays until closed.
         bool fineResume = false;          // Playing when precise seeking opened.
         std::int64_t fineMs = 0;          // Position under the film strip's line.
@@ -530,6 +541,7 @@ private:
     // Call before anything else in the area handles taps: the release is not a tap. Returns
     // whether the speed-up is on.
     bool holdForSpeed(Frame& frame, ImVec2 min, ImVec2 max, float pillTop);
+    void drawTapSeek(Frame& frame, ImVec2 min, ImVec2 max);
     // Dark pill centred on `centreX` below `top`, as the official app shows over the video.
     void drawPill(const Canvas& canvas, float centreX, float top, std::string_view label,
                   std::optional<Icon> icon = std::nullopt);

@@ -93,6 +93,7 @@ enum class Text : std::uint8_t {
     SubtitlesFailed,
     TranslationFailed,
     HeldSpeed,
+    SeekSeconds,
     ZoomedToFill,
     GoToChannel,
     ReleaseToCancel,

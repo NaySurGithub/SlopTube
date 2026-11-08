@@ -141,6 +141,7 @@ constexpr std::array<Translation, std::to_underlying(Text::Count)> kTranslations
      {"Auto-translation unavailable", "Traduction automatique indisponible",
       "Traducción automática no disponible"}},
     {Text::HeldSpeed, {"2x", "x 2", "2x"}},
+    {Text::SeekSeconds, {"{} seconds", "{} secondes", "{} segundos"}},
     {Text::ZoomedToFill,
      {"Zoomed to fill", "Vidéo agrandie pour occuper tout l'écran",
       "Ampliado para llenar la pantalla"}},

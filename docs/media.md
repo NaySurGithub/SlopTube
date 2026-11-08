@@ -147,11 +147,17 @@ starts from its prefetched `player` response, about a second after the swipe.
 
 ### Seeking
 
-Three gestures seek, behaving as in the official app:
+Four gestures seek, behaving as in the official app:
 
 - **Progress bar:** a drag starting in the 32 dp band at the bottom of the player. The storyboard
   frame and the time follow the finger, with the chapter title above the time.
 - **Easy seek:** a drag after holding the video for 2x (see [Speed](#speed)).
+- **Double tap:** a second tap within 0.3 s on the left or right 40 % of the video goes back or
+  forward 10 s, and each further tap on that side within 0.7 s 10 s more. The first tap has
+  already toggled the controls, so the side is asked before them (a tap there does not reach
+  the previous and next buttons); the seek hides them. The tapped side lights up under an arc
+  with three chevrons and the streak's total ("20 seconds"). Live streams seek within their
+  window; it is off during precise seeking and the autoplay countdown.
 - **Precise seeking:** pulling the finger 45 dp up while dragging the bar pauses the video and opens
   a film strip, with a 25 ms pulse. Its square 72 dp frames are the storyboard cells, cropped to
   their middle, one per storyboard interval (2 s without a storyboard), under a 3 dp line. Dragging

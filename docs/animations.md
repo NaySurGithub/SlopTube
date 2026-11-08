@@ -44,4 +44,5 @@ Durations live next to the primitives: screens 280 ms, sheets 320 ms, fades 200 
 | Launch: the logo of Android's splash screen shrinks into the play glyph of a loading bar, which creeps up while the home feed loads, completes once it is in, and fades out. It lasts as long as the feed takes (at most 8 s), never a fixed delay | `App::drawSplash` (`SplashScreen.cpp`) |
 | Seeking: the storyboard frame and time pill follow the finger above the bar, the handle grows to 20 dp | `App::drawScrubPreview` |
 | Precise seeking: the film strip follows the finger under a fixed line | `App::drawFineSeek` |
+| Double-tap seek: the tapped side lights under an arc, three chevrons light in turn towards the seek, then it all fades | `App::drawTapSeek` |
 | Double-tap like on a short: a white thumb pops and fades amid eight red and white rays shooting out (SlopTube's own design) | `App::drawLikeBurst` |
