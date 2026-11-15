@@ -520,10 +520,12 @@ Result<Player> player(Element root) {
     const auto status = json::string(root, "/playabilityStatus/status");
     if (status != "OK") {
         const auto reason = json::string(root, "/playabilityStatus/reason");
-        // Not started yet: the server describes when it will, and asks to be polled.
+        // Not started yet: the server describes when it will, and asks to be polled. Other
+        // refusals of a broadcast (members only, region) carry no offline slate.
         Element slate;
         if (root.at_pointer("/playabilityStatus/liveStreamability/liveStreamabilityRenderer")
-                .get(slate)) {
+                .get(slate) ||
+            !json::has(slate, "/offlineSlate/liveStreamOfflineSlateRenderer")) {
             return fail(std::string(status) + ": " + std::string(reason));
         }
         result.upcoming = Upcoming{

@@ -1290,7 +1290,7 @@ void Player::decodeLoop(Session& session) {
         const bool paused = session.paused;
         session.audio.setRunning(!paused && session.clockBaseUs >= 0);
         // Faster than 1x catches up with a live stream, then plays it at 1x from the edge on.
-        if (main->live && !paused) {
+        if (main && main->live && !paused) {
             const float wanted = m_speed;
             const float speed = wanted > 1 && session.nearLiveEdge() ? 1 : wanted;
             if (session.audio.speed() != speed) {
