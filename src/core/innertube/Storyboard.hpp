@@ -19,12 +19,19 @@ struct StoryboardFrame {
 };
 
 // The frame shown for `timeMs` from the smallest level at least `minWidth` pixels wide (else
-// the largest); none when the video has no storyboard.
+// the largest); none when the video has no storyboard or a live one.
 [[nodiscard]] std::optional<StoryboardFrame> storyboardFrame(const Storyboard& storyboard,
                                                              int minWidth, std::int64_t timeMs,
                                                              std::int64_t durationMs);
 
-// Time between two frames of the level storyboardFrame picks for `minWidth`; 0 without one.
+// A live storyboard's frame for segment `segment`, `edge` being the live edge's. A sheet is made
+// once all its segments are out (measured: 3 segments after its last), so the newest segments
+// have none yet; asking for it then would only cache a failure.
+[[nodiscard]] std::optional<StoryboardFrame>
+liveStoryboardFrame(const Storyboard& storyboard, std::int64_t segment, std::int64_t edge);
+
+// Time between two frames of the level storyboardFrame picks for `minWidth`; 0 without one, and
+// for a live storyboard (a frame per segment).
 [[nodiscard]] std::int64_t storyboardInterval(const Storyboard& storyboard, int minWidth,
                                               std::int64_t durationMs);
 

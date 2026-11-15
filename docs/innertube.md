@@ -261,6 +261,16 @@ Action types: 5 = like, 4 = dislike, 6 = remove like. The TV backend accepts lik
 clearing a vote is answered with `STATUS_FAILED`, in which case the app restores the previous
 state and shows a toast.
 
+## Upcoming streams
+
+A broadcast or premiere that has not started answers `player` with `LIVE_STREAM_OFFLINE` (ANDROID;
+VISIONOS says `UNPLAYABLE` without details) and a slate under
+`playabilityStatus.liveStreamability.liveStreamabilityRenderer`: its
+`offlineSlate.liveStreamOfflineSlateRenderer` holds `scheduledStartTime` (Unix seconds, as a
+string), `mainText` ("En direct dans 2 jours") and `subtitleText` (the date and time), localised,
+and `pollDelayMs` (30000) says how often to ask again. `parser::player` returns them as `Player::upcoming`, with no
+formats. `videoDetails.isUpcoming` is set too.
+
 ## Storyboards
 
 Seek previews come from `playerStoryboardSpecRenderer.spec`, which only the ANDROID and IOS
@@ -271,6 +281,10 @@ sheet URL gets `&sigh=`. `storyboardFrame` (`Storyboard.hpp`) picks the smallest
 as wide as asked and returns the sheet URL and the frame's rectangle in it. A typical video has
 48×27 (one sheet), 80×45 (10×10 sheets) and 160×90 (5×5 sheets, one frame every 2 s); the app
 uses the largest.
+
+A live stream has `playerLiveStoryboardSpecRenderer` instead (ANDROID only), one size and a frame
+per segment (see [Live streams](media.md#live-streams)); `parser::anyStoryboard` reads whichever
+the response carries.
 
 ## Streams
 

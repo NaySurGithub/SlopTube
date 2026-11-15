@@ -97,18 +97,22 @@ bool LiveSource::ended() const {
     return m_ended && m_ready.empty();
 }
 
-std::int64_t LiveSource::headSequence() const {
+std::int64_t LiveSource::fetchHead() {
     // Without a sequence number the server sends the newest segment.
     auto response = m_http.send({.url = m_url, .cancelled = &m_cancelled});
     if (!response || !response->ok()) {
         return -1;
     }
-    return sequenceOf(response->body);
+    const std::int64_t sequence = sequenceOf(response->body);
+    if (sequence >= 0) {
+        m_head = Segment{.sequence = sequence, .data = std::move(response->body)};
+    }
+    return sequence;
 }
 
 void LiveSource::fetchLoop() {
     if (m_next < 0) {
-        const std::int64_t head = headSequence();
+        const std::int64_t head = fetchHead();
         if (head >= 0) {
             m_edge = head;
             m_next = std::max<std::int64_t>(head - kLiveStartBehindSegments, 0);
@@ -127,6 +131,16 @@ void LiveSource::fetchLoop() {
             if (m_cancelled) {
                 return;
             }
+        }
+        if (m_head && m_head->sequence == m_next) {
+            {
+                const std::scoped_lock lock(m_mutex);
+                m_ready.push_back(std::move(*m_head));
+            }
+            m_head.reset();
+            m_changed.notify_all();
+            ++m_next;
+            continue;
         }
         std::string url = m_url;
         url += kSequenceParameter;

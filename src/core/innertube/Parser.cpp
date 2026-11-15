@@ -2,6 +2,7 @@
 
 #include <array>
 #include <charconv>
+#include <limits>
 #include <ranges>
 #include <utility>
 
@@ -479,14 +480,66 @@ Storyboard storyboard(std::string_view spec) {
     return result;
 }
 
+Storyboard liveStoryboard(std::string_view spec) {
+    // "<sheet url>#width#height#columns#rows": one size, the url's "$M" being the sheet number,
+    // and frame n the picture of segment n.
+    Storyboard result{.live = true};
+    std::vector<std::string_view> fields;
+    for (const auto part : std::views::split(spec, '#')) {
+        fields.emplace_back(part.begin(), part.end());
+    }
+    if (fields.size() < 5) {
+        return {};
+    }
+    const auto number = [](std::string_view text) {
+        int value = 0;
+        std::from_chars(text.data(), text.data() + text.size(), value);
+        return value;
+    };
+    result.levels.push_back({
+        .width = number(fields[1]),
+        .height = number(fields[2]),
+        .count = std::numeric_limits<int>::max(), // It grows with the broadcast.
+        .columns = number(fields[3]),
+        .rows = number(fields[4]),
+        .url = std::string(fields[0]),
+    });
+    return result;
+}
+
+Storyboard anyStoryboard(Element root) {
+    if (const auto spec = json::string(root, "/storyboards/playerStoryboardSpecRenderer/spec");
+        !spec.empty()) {
+        return storyboard(spec);
+    }
+    return liveStoryboard(json::string(root, "/storyboards/playerLiveStoryboardSpecRenderer/spec"));
+}
+
 Result<Player> player(Element root) {
+    Player result;
     const auto status = json::string(root, "/playabilityStatus/status");
     if (status != "OK") {
         const auto reason = json::string(root, "/playabilityStatus/reason");
-        return fail(std::string(status) + ": " + std::string(reason));
+        // Not started yet: the server describes when it will, and asks to be polled. Other
+        // refusals of a broadcast (members only, region) carry no offline slate.
+        Element slate;
+        if (root.at_pointer("/playabilityStatus/liveStreamability/liveStreamabilityRenderer")
+                .get(slate) ||
+            !json::has(slate, "/offlineSlate/liveStreamOfflineSlateRenderer")) {
+            return fail(std::string(status) + ": " + std::string(reason));
+        }
+        result.upcoming = Upcoming{
+            .startsAt = json::integer(
+                slate, "/offlineSlate/liveStreamOfflineSlateRenderer/scheduledStartTime"),
+            .title = text(slate, "/offlineSlate/liveStreamOfflineSlateRenderer/mainText"),
+            .subtitle = text(slate, "/offlineSlate/liveStreamOfflineSlateRenderer/subtitleText"),
+            .pollMs = json::integer(slate, "/pollDelayMs"),
+        };
+        if (result.upcoming->title.empty()) {
+            result.upcoming->title = reason;
+        }
     }
 
-    Player result;
     Element details;
     if (!root["videoDetails"].get(details)) {
         result.details = VideoDetails{
@@ -506,12 +559,15 @@ Result<Player> player(Element root) {
         appendFormats(streamingData, "formats", result.formats);
         appendFormats(streamingData, "adaptiveFormats", result.formats);
     }
+    if (result.upcoming) {
+        result.formats.clear();
+        return result;
+    }
     if (result.formats.empty()) {
         return fail("player: no directly playable formats");
     }
 
-    result.storyboard =
-        storyboard(json::string(root, "/storyboards/playerStoryboardSpecRenderer/spec"));
+    result.storyboard = anyStoryboard(root);
     return result;
 }
 

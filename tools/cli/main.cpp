@@ -160,6 +160,12 @@ int player(innertube::Api& api, std::string_view videoId) {
         std::println(stderr, "error: {}", info.error().message);
         return EXIT_FAILURE;
     }
+    if (const auto& upcoming = info->upcoming) {
+        std::println("{} — {} (upcoming)", info->details.title, info->details.channel);
+        std::println("  {} · {} (starts at {}, ask again every {} ms)", upcoming->title,
+                     upcoming->subtitle, upcoming->startsAt, upcoming->pollMs);
+        return EXIT_SUCCESS;
+    }
     if (info->details.live) {
         std::println("{} — {} (live)", info->details.title, info->details.channel);
     } else {
@@ -176,6 +182,11 @@ int player(innertube::Api& api, std::string_view videoId) {
         info->storyboard = std::move(*storyboard);
     }
     for (const auto& level : info->storyboard.levels) {
+        if (info->storyboard.live) {
+            std::println("  live storyboard {}x{} (one frame per segment, {}×{} per sheet)  {}",
+                         level.width, level.height, level.columns, level.rows, level.url);
+            continue;
+        }
         std::println("  storyboard {}x{} ×{} ({}×{} per sheet, {} ms)  {}", level.width,
                      level.height, level.count, level.columns, level.rows, level.intervalMs,
                      level.url);

@@ -17,9 +17,10 @@ class Client;
 
 namespace sloptube::app::media {
 
-// Playback starts this many segments behind the live edge, so the next one is always out before
-// it is needed (about 15 s with 5 s segments, as the official app).
-inline constexpr std::int64_t kLiveStartBehindSegments = 3;
+// Playback starts this many segments behind the live edge: the segment after the edge is out
+// before the edge's own has played, so it is always there in time (5 to 10 s behind live with
+// 5 s segments). A stall only adds to that margin, since playback never skips ahead.
+inline constexpr std::int64_t kLiveStartBehindSegments = 1;
 
 // Failed fetches (2 s apart) before a stream counts as ended: a broadcast that stopped, or, for a
 // source opened by a seek, segments the server no longer keeps, which must not hold playback up.
@@ -60,13 +61,14 @@ public:
 
 private:
     void fetchLoop();
-    // The live edge's sequence number, or -1.
-    [[nodiscard]] std::int64_t headSequence() const;
+    // The live edge segment, kept in m_head; its sequence number, or -1.
+    [[nodiscard]] std::int64_t fetchHead();
 
     const http::Client& m_http;
     std::string m_url;
     std::int64_t m_next; // Sequence number of the next segment to fetch; -1 until known.
     int m_maxMisses;
+    std::optional<Segment> m_head; // The edge segment, read to learn its number: not fetched again.
 
     mutable std::mutex m_mutex;
     std::condition_variable m_changed;

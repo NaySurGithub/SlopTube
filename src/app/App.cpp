@@ -565,13 +565,35 @@ std::size_t App::chapterAt(std::int64_t timeMs) const {
     return after == chapters.begin() ? 0 : static_cast<std::size_t>(after - chapters.begin() - 1);
 }
 
+std::optional<innertube::StoryboardFrame> App::previewAt(int minWidth, std::int64_t timeMs) const {
+    if (!m_watch.storyboard.live) {
+        return innertube::storyboardFrame(m_watch.storyboard, minWidth, timeMs,
+                                          m_player.durationUs() / 1000);
+    }
+    const auto window = m_player.liveWindow();
+    if (!window) {
+        return std::nullopt;
+    }
+    return innertube::liveStoryboardFrame(m_watch.storyboard,
+                                          window->segmentAt(window->startUs + timeMs * 1000),
+                                          window->segmentAt(window->edgeUs - 1));
+}
+
+std::int64_t App::previewStepMs(int minWidth) const {
+    if (!m_watch.storyboard.live) {
+        return innertube::storyboardInterval(m_watch.storyboard, minWidth,
+                                             m_player.durationUs() / 1000);
+    }
+    const auto window = m_player.liveWindow();
+    return window && !m_watch.storyboard.levels.empty() ? window->segmentUs / 1000 : 0;
+}
+
 void App::drawScrubPreview(Frame& frame, ImVec2 min, ImVec2 max, std::int64_t timeMs, float barY,
                            std::string_view label) {
     const theme::DarkScope darkColours;
     const Canvas& c = frame.canvas;
     // The largest frames: they are stretched over the whole player.
-    auto preview = innertube::storyboardFrame(m_watch.storyboard, std::numeric_limits<int>::max(),
-                                              timeMs, m_player.durationUs() / 1000);
+    auto preview = previewAt(std::numeric_limits<int>::max(), timeMs);
     const Texture* sheet = preview ? m_thumbnails->get(preview->url, preview->sheetWidth) : nullptr;
     if (sheet) {
         m_watch.shownPreview = preview;
@@ -623,14 +645,13 @@ void App::drawScrubPreview(Frame& frame, ImVec2 min, ImVec2 max, std::int64_t ti
     }
 }
 
-void App::drawFineSeek(Frame& frame, ImVec2 min, ImVec2 max) {
+void App::drawFineSeek(Frame& frame, ImVec2 min, ImVec2 max, std::int64_t durationMs) {
     const theme::DarkScope darkColours;
     const Canvas& c = frame.canvas;
     ImDrawList* list = c.list();
-    const std::int64_t durationMs = m_player.durationUs() / 1000;
     const float size = c.dp(kFilmstripFrame);
     const int sizePx = static_cast<int>(size);
-    std::int64_t stepMs = innertube::storyboardInterval(m_watch.storyboard, sizePx, durationMs);
+    std::int64_t stepMs = previewStepMs(sizePx);
     if (stepMs <= 0) {
         stepMs = kFineFrameMs;
     }
@@ -648,8 +669,7 @@ void App::drawFineSeek(Frame& frame, ImVec2 min, ImVec2 max) {
         const float x = centreX + (static_cast<float>(k) - offset) * size;
         const ImVec2 at{x, top};
         const ImVec2 to{x + size, top + size};
-        const auto preview =
-            innertube::storyboardFrame(m_watch.storyboard, sizePx, k * stepMs, durationMs);
+        const auto preview = previewAt(sizePx, k * stepMs);
         const Texture* sheet =
             preview ? m_thumbnails->get(preview->url, preview->sheetWidth) : nullptr;
         if (!sheet) {
@@ -674,8 +694,11 @@ void App::drawFineSeek(Frame& frame, ImVec2 min, ImVec2 max) {
     const float line = c.dp(kFilmstripLine);
     c.rect({centreX - line * 0.5f, top}, {centreX + line * 0.5f, top + size}, IM_COL32_WHITE);
 
-    // The time, then play, centred above the strip; close in the corner.
-    const std::string time = pillTime(m_watch.fineMs);
+    // The time (a live stream's: how far behind live), then play, centred above the strip; close
+    // in the corner.
+    const std::string time = m_player.live()
+                                 ? '-' + formatDuration((durationMs - m_watch.fineMs) / 1000)
+                                 : pillTime(m_watch.fineMs);
     const ImVec2 extent = c.measure(kTimePillSize, time);
     const float timeHeight = c.lineHeight(kTimePillSize) + c.dp(kFineTimePaddingY) * 2;
     const ImVec2 timeMin{centreX - extent.x * 0.5f - c.dp(kFineTimePaddingX),
@@ -722,10 +745,20 @@ void App::startPlayback(const std::string& videoId) {
             if (m_watch.item.id != id) {
                 return; // The user left before the stream resolved.
             }
+            if (!player && m_watch.upcoming) {
+                awaitStart(*m_watch.upcoming); // Asking again failed: the slate stays, and so on.
+                return;
+            }
             if (!player) {
                 m_watch.error = player.error().message;
                 return;
             }
+            if (player->upcoming) {
+                m_watch.details = player->details;
+                awaitStart(std::move(*player->upcoming));
+                return;
+            }
+            m_watch.upcoming.reset();
             beginPlayback(std::move(*player));
         });
     });
@@ -793,6 +826,7 @@ void App::closeVideo() {
     m_speedHeld = false;
     m_player.setSpeed(m_speed);
     m_watch.item.id.clear(); // Drops stream and metadata results still in flight.
+    m_watch.upcoming.reset();
     m_videoSurface->release();
     m_player.close();
 }
@@ -934,6 +968,7 @@ bool App::frame() {
     if (m_watch.details && m_watch.details->live && watching() && m_onScreen) {
         pollLiveChat();
     }
+    pollUpcoming();
     if (!m_display.hasSurface()) {
         return false;
     }
@@ -1596,6 +1631,11 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
         list->PopClipRect();
         return;
     }
+    if (m_watch.upcoming) {
+        drawUpcoming(frame, min, max);
+        list->PopClipRect();
+        return;
+    }
     // A video that cannot play says so on the video itself, with a way to try again.
     if (!m_watch.error.empty() || m_player.state() == media::PlayerState::Failed) {
         const float gutter = c.dp(theme::kGutter);
@@ -1677,8 +1717,7 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
         const float pull = c.dp(kFinePull);
         if (m_watch.fine) {
             // The strip follows the finger: a frame's width is one storyboard interval.
-            std::int64_t stepMs = innertube::storyboardInterval(
-                m_watch.storyboard, static_cast<int>(c.dp(kFilmstripFrame)), durationMs);
+            std::int64_t stepMs = previewStepMs(static_cast<int>(c.dp(kFilmstripFrame)));
             if (stepMs <= 0) {
                 stepMs = kFineFrameMs;
             }
@@ -1693,7 +1732,7 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
                                                                     static_cast<float>(durationMs));
         } else {
             seek.targetMs = toMs(at.x);
-            if (seek.origin.y - at.y > pull && !live) { // Lives have no storyboard.
+            if (seek.origin.y - at.y > pull) {
                 m_watch.fine = true;
                 m_watch.fineResume = playing;
                 m_usedFineSeek = true;
@@ -1773,7 +1812,7 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
     const bool hideControls = seeking || m_watch.fine;
     const float barY = max.y - c.dp(theme::kProgressHeight);
     if (m_watch.fine) {
-        drawFineSeek(frame, min, max);
+        drawFineSeek(frame, min, max, durationMs);
     } else if (seeking) {
         const SeekState& seek = *m_watch.seek;
         const bool undo = seek.undo.armed(frame.time);
@@ -1961,9 +2000,9 @@ void App::drawTapSeek(Frame& frame, ImVec2 min, ImVec2 max) {
 bool App::holdForSpeed(Frame& frame, ImVec2 min, ImVec2 max, float pillTop) {
     // A drag (scrubbing, pulling the video down) is not a hold: pressed() ends past the slop.
     const bool pressing = m_touch.pressed(min, max);
-    // A broadcast plays at the edge: 2x would run out of stream within seconds.
+    // At a live stream's edge 2x would run out of stream within seconds: only behind it.
     if (!m_speedHeld && pressing && m_player.state() == media::PlayerState::Playing &&
-        !m_player.live()) {
+        m_player.canSpeedUp()) {
         if (m_touch.pressDuration() >= kHoldSeconds) {
             m_speedHeld = true;
             m_player.setSpeed(kHeldSpeed);
@@ -1981,8 +2020,12 @@ bool App::holdForSpeed(Frame& frame, ImVec2 min, ImVec2 max, float pillTop) {
         return false;
     }
 
-    // "2x ▸▸" pill, top centre, as in the official app.
-    drawPill(frame.canvas, (min.x + max.x) * 0.5f, pillTop, tr(Text::HeldSpeed), Icon::FastForward);
+    // "2x ▸▸" pill, top centre, as in the official app; gone once a live stream has caught up
+    // with its edge and plays at 1x again.
+    if (m_player.canSpeedUp()) {
+        drawPill(frame.canvas, (min.x + max.x) * 0.5f, pillTop, tr(Text::HeldSpeed),
+                 Icon::FastForward);
+    }
     frame.animating = true;
     return true;
 }
@@ -2101,11 +2144,9 @@ void App::drawPlayerMenu(Frame& frame, ImVec2 min, ImVec2 max) {
             rows.push_back({std::move(quality), false, true});
             opens.push_back(PlayerMenu::Quality);
         }
-        if (!m_player.live()) {
-            rows.push_back(
-                {std::string(tr(Text::PlaybackSpeed)) + " · " + speedLabel(m_speed), false, true});
-            opens.push_back(PlayerMenu::Speed);
-        }
+        rows.push_back(
+            {std::string(tr(Text::PlaybackSpeed)) + " · " + speedLabel(m_speed), false, true});
+        opens.push_back(PlayerMenu::Speed);
         if (m_player.canPlayAudioOnly()) {
             rows.push_back({std::string(tr(Text::AudioOnly)), m_player.audioOnly()});
         }
