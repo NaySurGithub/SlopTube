@@ -10,6 +10,7 @@ import android.content.Intent;
 import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.content.res.Resources;
 import android.media.AudioManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -295,11 +296,27 @@ public final class SlopTubeActivity extends NativeActivity {
             return own;
         }
         try {
-            return Math.min(1f, Settings.System.getInt(getContentResolver(),
-                    Settings.System.SCREEN_BRIGHTNESS) / 255f);
+            return Math.min(1f, (float) Settings.System.getInt(getContentResolver(),
+                    Settings.System.SCREEN_BRIGHTNESS) / brightnessSettingMaximum());
         } catch (Settings.SettingNotFoundException unknown) {
             return 0.5f;
         }
+    }
+
+    // The system brightness setting's range: 255 on most phones, more on some (2047 or 4095 on
+    // some Xiaomi models), as the framework's own resource says.
+    private static int brightnessSettingMaximum() {
+        Resources system = Resources.getSystem();
+        int id = system.getIdentifier("config_screenBrightnessSettingMaximum", "integer",
+                "android");
+        if (id != 0) {
+            try {
+                return Math.max(1, system.getInteger(id));
+            } catch (Resources.NotFoundException missing) {
+                // Falls back to the usual range.
+            }
+        }
+        return 255;
     }
 
     // Overrides the screen's brightness while the app is shown, 0 to 1; a negative value goes back

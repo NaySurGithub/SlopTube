@@ -467,9 +467,10 @@ void Canvas::icon(Icon icon, ImVec2 c, float sizeDp, ImU32 color) const {
         }
         break;
     case Icon::Volume: {
-        // A speaker, then two arcs of sound.
-        const std::array speaker{p(-9, -3), p(-5, -3), p(0, -8), p(0, 8), p(-5, 3), p(-9, 3)};
-        m_list->AddConvexPolyFilled(speaker.data(), static_cast<int>(speaker.size()), color);
+        // A speaker (a box, then its flared cone, each convex), then two arcs of sound.
+        m_list->AddRectFilled(p(-9, -3), p(-5, 3), color);
+        const std::array cone{p(-5, -3), p(0, -8), p(0, 8), p(-5, 3)};
+        m_list->AddConvexPolyFilled(cone.data(), static_cast<int>(cone.size()), color);
         constexpr float kArc = std::numbers::pi_v<float> / 3.5f;
         for (const float radius : {4.5f, 8.5f}) {
             m_list->PathArcTo(p(0, 0), unit * radius, -kArc, kArc);
