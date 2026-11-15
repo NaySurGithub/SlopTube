@@ -18,6 +18,7 @@ struct Settings {
     bool backgroundPlay = true;      // Playback goes on when the app leaves the screen.
     bool pictureInPicture = true;    // ...in a small window over other apps.
     bool autoplay = true;            // The next video plays when one ends.
+    bool playerSwipes = true;        // Fullscreen swipes on the sides set brightness and volume.
     bool uploadNotifications = true; // New uploads of subscriptions are notified.
     bool checkUpdates = true;        // Release builds look for a newer release at launch.
     bool audioOnly = false;          // Videos play without their picture, to save data.

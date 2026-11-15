@@ -45,7 +45,7 @@ without a copy.
 - **Account** - Google sign-in with a device code, several accounts, likes, subscriptions,
   comments and replies, saving to playlists
 - **Player** - hardware decoding up to 1080p60, quality choice, playback speed, 2x while holding,
-  seek previews, chapters, double tap to seek, precise seeking, seek undo, fullscreen with pinch to zoom, mini player,
+  seek previews, chapters, double tap to seek, swipes for fullscreen, brightness and volume, precise seeking, seek undo, fullscreen with pinch to zoom, mini player,
   autoplay, and the official app's haptic feedback
 - **Audio only** - plays a video's sound without downloading its picture, to save data and battery
 - **Background** - playback goes on with the screen off or in other apps, with the media

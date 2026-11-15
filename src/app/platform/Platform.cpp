@@ -225,6 +225,49 @@ void Platform::setLightSystemBars(bool statusBar, bool navigationBar) {
     }
 }
 
+float Platform::windowBrightness() {
+    const LocalFrame frame(m_env);
+    jobject activity = m_app->activity->clazz;
+    const float brightness =
+        m_env->CallFloatMethod(activity, method(m_env, activity, "windowBrightness", "()F"));
+    if (m_env->ExceptionCheck()) {
+        m_env->ExceptionClear();
+        return 0.5f;
+    }
+    return brightness;
+}
+
+void Platform::setWindowBrightness(float brightness) {
+    const LocalFrame frame(m_env);
+    jobject activity = m_app->activity->clazz;
+    m_env->CallVoidMethod(activity, method(m_env, activity, "setWindowBrightness", "(F)V"),
+                          brightness);
+    if (m_env->ExceptionCheck()) {
+        m_env->ExceptionClear();
+    }
+}
+
+float Platform::musicVolume() {
+    const LocalFrame frame(m_env);
+    jobject activity = m_app->activity->clazz;
+    const float volume =
+        m_env->CallFloatMethod(activity, method(m_env, activity, "musicVolume", "()F"));
+    if (m_env->ExceptionCheck()) {
+        m_env->ExceptionClear();
+        return 0;
+    }
+    return volume;
+}
+
+void Platform::setMusicVolume(float volume) {
+    const LocalFrame frame(m_env);
+    jobject activity = m_app->activity->clazz;
+    m_env->CallVoidMethod(activity, method(m_env, activity, "setMusicVolume", "(F)V"), volume);
+    if (m_env->ExceptionCheck()) {
+        m_env->ExceptionClear();
+    }
+}
+
 void Platform::haptic(Haptic haptic) {
     const LocalFrame frame(m_env);
     if (haptic == Haptic::LongPress || haptic == Haptic::ContextClick) {

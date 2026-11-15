@@ -34,10 +34,11 @@ void App::drawSettings(Frame& frame, Screen& screen, ImVec2 min, ImVec2 max) {
         bool Settings::* value;
     };
 
-    constexpr std::array<Toggle, 4> kToggles{{
+    constexpr std::array<Toggle, 5> kToggles{{
         {Text::BackgroundPlay, Text::BackgroundPlayDetail, &Settings::backgroundPlay},
         {Text::PictureInPicture, Text::PictureInPictureDetail, &Settings::pictureInPicture},
         {Text::Autoplay, Text::AutoplayDetail, &Settings::autoplay},
+        {Text::PlayerSwipes, Text::PlayerSwipesDetail, &Settings::playerSwipes},
         {Text::UploadNotifications, Text::UploadNotificationsDetail,
          &Settings::uploadNotifications},
     }};

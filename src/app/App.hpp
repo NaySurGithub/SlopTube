@@ -541,6 +541,11 @@ private:
     // Call before anything else in the area handles taps: the release is not a tap. Returns
     // whether the speed-up is on.
     bool holdForSpeed(Frame& frame, ImVec2 min, ImVec2 max, float pillTop);
+    // Vertical swipes on the video (PlayerSwipes.cpp): up into fullscreen and down out of it, and
+    // in fullscreen brightness on the left and volume on the right. True while one owns the
+    // gesture.
+    bool playerSwipes(Frame& frame, ImVec2 min, ImVec2 max);
+    void drawSwipeLevel(Frame& frame, ImVec2 min, ImVec2 max);
     void drawTapSeek(Frame& frame, ImVec2 min, ImVec2 max);
     // Dark pill centred on `centreX` below `top`, as the official app shows over the video.
     void drawPill(const Canvas& canvas, float centreX, float top, std::string_view label,
@@ -716,6 +721,26 @@ private:
     float m_speed = 1; // Playback speed chosen in the player menu, kept across videos.
 
     Settings m_settings;
+
+    struct SwipeState {
+        enum class Kind : std::uint8_t {
+            Undecided,  // The gesture has not moved past the touch slop yet.
+            Ignored,    // It is not a swipe of the player's.
+            Fullscreen, // Up in, or down out of, fullscreen.
+            Brightness,
+            Volume,
+        };
+
+        Kind kind = Kind::Undecided;
+        float from = 0;               // The level when the swipe began, 0 to 1.
+        float level = 0;              // The level now.
+        float applied = -1;           // The level last handed to the system.
+        Kind shown = Kind::Undecided; // Brightness or Volume while its level is on screen.
+        double changedAt = -1;        // Last change, for the level's fade.
+        bool brightnessSet = false;   // The window's brightness overrides the system's.
+    };
+
+    SwipeState m_swipe;
 
     struct UpdateState {
         std::optional<Release> available;

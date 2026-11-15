@@ -26,6 +26,7 @@ Settings Settings::load(const std::filesystem::path& file) {
     read("/backgroundPlay", settings.backgroundPlay);
     read("/pictureInPicture", settings.pictureInPicture);
     read("/autoplay", settings.autoplay);
+    read("/playerSwipes", settings.playerSwipes);
     read("/uploadNotifications", settings.uploadNotifications);
     read("/checkUpdates", settings.checkUpdates);
     read("/audioOnly", settings.audioOnly);
@@ -46,6 +47,7 @@ void Settings::save(const std::filesystem::path& file) const {
         .field("backgroundPlay", backgroundPlay)
         .field("pictureInPicture", pictureInPicture)
         .field("autoplay", autoplay)
+        .field("playerSwipes", playerSwipes)
         .field("uploadNotifications", uploadNotifications)
         .field("checkUpdates", checkUpdates)
         .field("audioOnly", audioOnly)

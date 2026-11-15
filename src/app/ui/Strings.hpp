@@ -190,6 +190,8 @@ enum class Text : std::uint8_t {
     AppearanceLight,
     AppearanceDark,
     AudioOnly,
+    PlayerSwipes,
+    PlayerSwipesDetail,
     Count,
 };
 

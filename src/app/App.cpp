@@ -1636,6 +1636,8 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
                                          static_cast<float>(durationMs));
     };
 
+    // Vertical swipes own their gesture: no 2x hold, no easy seek under them.
+    const bool swiping = playerSwipes(frame, min, max);
     // Easy seek: dragging the video while holding it for 2x seeks instead, with a pulse.
     if (m_speedHeld && durationMs > 0 && !m_watch.seek && m_touch.dragging() &&
         m_touch.startedIn(min, max)) {
@@ -1646,7 +1648,7 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
                                  .chapter = chapterAt(playedMs)};
         m_platform.haptic(Haptic::Seek);
     }
-    if (holdForSpeed(frame, min, max, min.y + c.dp(kSpeedPillTop))) {
+    if (!swiping && holdForSpeed(frame, min, max, min.y + c.dp(kSpeedPillTop))) {
         m_watch.controlsVisible = false;
     }
 
@@ -1901,6 +1903,7 @@ void App::drawPlayer(Frame& frame, ImVec2 min, ImVec2 max) {
         c.spinner(center, theme::kSpinnerSize * 1.4f, theme::g_textPrimary, frame.time);
         frame.animating = true;
     }
+    drawSwipeLevel(frame, min, max);
     list->PopClipRect();
 
     // Precise seeking keeps the video for itself: only its buttons react.
@@ -2292,6 +2295,11 @@ void App::setFullscreen(bool fullscreen) {
     if (!fullscreen) {
         m_rotationEntersFullscreen = false; // Until the display is seen in portrait again.
         m_zoom = 1;                         // Each fullscreen session starts fitted.
+        // A brightness swiped in fullscreen is for watching there only.
+        if (m_swipe.brightnessSet) {
+            m_platform.setWindowBrightness(-1);
+            m_swipe.brightnessSet = false;
+        }
     }
 }
 

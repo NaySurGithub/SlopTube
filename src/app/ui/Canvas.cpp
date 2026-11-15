@@ -456,6 +456,27 @@ void Canvas::icon(Icon icon, ImVec2 c, float sizeDp, ImU32 color) const {
         m_list->AddLine(p(-5, 0), p(-1.5f, 4), theme::g_background, stroke * 1.2f);
         m_list->AddLine(p(-1.5f, 4), p(5.5f, -4), theme::g_background, stroke * 1.2f);
         break;
+    case Icon::Brightness:
+        // A disc with eight rays.
+        m_list->AddCircleFilled(c, unit * 4.5f, color);
+        for (int ray = 0; ray < 8; ++ray) {
+            const float angle = static_cast<float>(ray) * std::numbers::pi_v<float> / 4;
+            const float x = std::cos(angle);
+            const float y = std::sin(angle);
+            m_list->AddLine(p(x * 7.5f, y * 7.5f), p(x * 10, y * 10), color, stroke);
+        }
+        break;
+    case Icon::Volume: {
+        // A speaker, then two arcs of sound.
+        const std::array speaker{p(-9, -3), p(-5, -3), p(0, -8), p(0, 8), p(-5, 3), p(-9, 3)};
+        m_list->AddConvexPolyFilled(speaker.data(), static_cast<int>(speaker.size()), color);
+        constexpr float kArc = std::numbers::pi_v<float> / 3.5f;
+        for (const float radius : {4.5f, 8.5f}) {
+            m_list->PathArcTo(p(0, 0), unit * radius, -kArc, kArc);
+            m_list->PathStroke(color, stroke);
+        }
+        break;
+    }
     case Icon::Mic:
         // A capsule in a cradle on a stem.
         m_list->AddRectFilled(p(-3.5f, -10), p(3.5f, 2.5f), color, unit * 3.5f);

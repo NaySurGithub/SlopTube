@@ -179,12 +179,23 @@ struct StoryboardLevel {
 
 struct Storyboard {
     std::vector<StoryboardLevel> levels; // Smallest frames first.
+    // A live stream's: frame n is segment n ("&sq=<n>"), and a sheet exists once it is full.
+    bool live = false;
+};
+
+// A broadcast or premiere that has not started, in the server's words (already localised).
+struct Upcoming {
+    std::int64_t startsAt = 0; // Unix time it is scheduled for; 0 when unknown.
+    std::string title;         // "Live in 2 days", "Premieres in 3 minutes"
+    std::string subtitle;      // The date and time.
+    std::int64_t pollMs = 0;   // How often to ask again whether it started.
 };
 
 struct Player {
     VideoDetails details;
     std::vector<Format> formats;
     Storyboard storyboard;
+    std::optional<Upcoming> upcoming; // Set, with no formats, before the stream starts.
 };
 
 // A subtitle track of a video, fetched from the timedtext service.

@@ -308,6 +308,15 @@ constexpr std::array<Translation, std::to_underlying(Text::Count)> kTranslations
     {Text::AppearanceLight, {"Light", "Clair", "Claro"}},
     {Text::AppearanceDark, {"Dark", "Sombre", "Oscuro"}},
     {Text::AudioOnly, {"Audio only", "Audio seul", "Solo audio"}},
+    {Text::PlayerSwipes,
+     {"Brightness and volume gestures", "Gestes de luminosité et de volume",
+      "Gestos de brillo y volumen"}},
+    {Text::PlayerSwipesDetail,
+     {"In fullscreen, swipe up or down on the left for brightness, on the right for volume",
+      "En plein écran, glissez vers le haut ou le bas à gauche pour la luminosité, à droite pour "
+      "le volume",
+      "En pantalla completa, desliza arriba o abajo a la izquierda para el brillo y a la derecha "
+      "para el volumen"}},
 }};
 
 // Catch a missing or misordered row at compile time rather than showing the wrong text.
