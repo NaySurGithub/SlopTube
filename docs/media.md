@@ -73,7 +73,7 @@ The watch page's settings button opens the menu (`App::drawPlayerMenu`). Rows sh
 ### Speed
 
 Pressing and holding on the video (watch page, fullscreen or Shorts) plays at 2x until the finger
-lifts, with an "x 2 ▸▸" pill at the top, as in the official app (`App::holdForSpeed`):
+lifts (a live stream only while behind its edge, see [Live streams](#live-streams)), with an "x 2 ▸▸" pill at the top, as in the official app (`App::holdForSpeed`):
 
 - **Gesture:** the press must last 0.4 s without moving past the touch slop, so scrubbing and
   pulling the video down are never holds. The phone vibrates as 2x starts, with the system's
@@ -188,8 +188,10 @@ continue the stream's timeline, and whose `emsg` text carries `Sequence-Number: 
 | `sq` = edge + 1 | Held until the segment exists (up to 5 s), then sent |
 | `sq` further ahead | 204 No Content after a few seconds |
 
-`LiveSource` reads the edge's number, starts 3 segments behind it (about 15 s, so the next one is
-always out before it is needed) and keeps 3 segments downloaded ahead. The player demuxes each
+`LiveSource` reads the edge's number from the edge segment itself (kept, not fetched again),
+starts 1 segment behind it and keeps 3 segments downloaded ahead. Playback is then 5 to 10 s behind
+live: the segment after the edge comes out before the edge's own has played, so it is always there
+in time, and a stall only widens that margin, since playback never skips ahead. The player demuxes each
 one with its own `AMediaExtractor` over the bytes in memory (`SegmentFile`), and moves the same
 decoders on to the next segment when one is used up (`Input::advance`), so playback runs across
 segments without a gap. Audio and video start at the same segment. A quality switch opens the
@@ -207,8 +209,30 @@ the decoder loop), and a seek within three segments of the edge starts at the ed
 
 The watch page's bar spans the window. "LIVE" with a red dot shows at the edge; behind it, the dot
 turns grey with how far behind ("LIVE -12:34"), and tapping it goes back to live. The seek pill
-shows the time behind live. Speed, 2x, precise seeking (there is no storyboard) and downloading
-are not offered.
+shows the time behind live.
+
+**Speed.** The playback speed and the 2x hold work behind the edge, to catch up. Once playback is as
+close to the edge as a fresh start would be (`Session::nearLiveEdge`), the decoder plays at 1x
+whatever the chosen speed, the 2x pill goes, and a new hold does not start (`Player::canSpeedUp`).
+Slower speeds always apply.
+
+**Previews and precise seeking.** Only ANDROID sends a live stream's storyboard,
+`playerLiveStoryboardSpecRenderer`, `<sheet url>#width#height#columns#rows` (159×90, 3×3). Frame
+*n* is the picture of segment *n*: sheet `n / 9`, cell `n % 9` (checked against the first frame of
+each segment of a sheet). A sheet is served once its segments are out, measured 3 segments after
+its last one, so the newest 20 s or so have no preview (`liveStoryboardFrame` does not ask for
+them, which would only cache a failure). The seek previews, the precise seeking film strip (a frame
+per segment) and its time behind live then work as for any video.
+
+**Not started yet.** A broadcast or premiere that has not started is answered `LIVE_STREAM_OFFLINE`
+with a slate (see [innertube.md](innertube.md#upcoming-streams)). The player shows the thumbnail,
+dimmed, under the server's own words ("Live in 2 days", then the date), and asks again as often
+as the server says (`pollDelayMs`, 30 s); once it has started, it plays (`App::awaitStart`,
+`LivePage.cpp`).
+
+Downloading is not offered: a live stream is a sequence of fragmented MP4 files, each with its own
+`moov`, that would have to be remuxed into one file, and the official app does not offer it either.
+Once the broadcast is over, its recording downloads like any video.
 
 Closing a stream does not wait for a held request: `http::Request::cancelled` makes libcurl give
 up within about a second.
@@ -287,8 +311,7 @@ sizes. `Downloads` then saves the video under `<data>/downloads/<video id>/`:
 
 - VISIONOS is undocumented and could be closed at any time. Without it, playback falls back to
   360p, and live streams do not play at all.
-- Live streams start about 15 s behind the edge. Upcoming streams and premieres show the
-  server's reason instead.
+- Live streams start 5 to 10 s behind the edge, and cannot be downloaded while broadcasting.
 - Background playback keeps decoding video it does not show, which costs some battery.
 - Auto picks a quality when a video opens and when Auto is re-selected. It does not adapt in the
   middle of a video.

@@ -267,6 +267,9 @@ private:
         double endedAt = -1;            // The video ended: the autoplay countdown runs from here.
         bool autoplayCancelled = false; // The countdown was cancelled for this video.
         std::shared_ptr<LiveChat> chat; // Live streams: shown in place of the comments teaser.
+        // A broadcast or premiere not started yet, shown over the player until it does.
+        std::optional<innertube::Upcoming> upcoming;
+        double upcomingPollAt = -1; // When to ask again whether it started; -1 while asking.
     };
 
     struct SheetState {
@@ -420,6 +423,11 @@ private:
     void openLiveChat();
     void pollLiveChat();
     void drawLiveChat(Frame& frame, ImVec2 min, ImVec2 max);
+    // A stream that has not started: its slate over the player, asked for again as often as the
+    // server says, and played once it starts.
+    void awaitStart(innertube::Upcoming upcoming);
+    void pollUpcoming();
+    void drawUpcoming(Frame& frame, ImVec2 min, ImVec2 max);
 
     // Where a live stream stands, in ms within what can be played; nullopt for other videos.
     struct LiveTimeline {
@@ -473,13 +481,20 @@ private:
     void startPlayback(const std::string& videoId);
     // Fetches the seek previews of the video in m_watch.
     void loadStoryboard(const std::string& videoId);
+    // The seek preview at `timeMs` on the bar's scale (for a live stream, within what it keeps),
+    // from the smallest frames at least `minWidth` px wide; none without previews.
+    [[nodiscard]] std::optional<innertube::StoryboardFrame> previewAt(int minWidth,
+                                                                      std::int64_t timeMs) const;
+    // Time between two previews (a live stream's: one segment); 0 without previews.
+    [[nodiscard]] std::int64_t previewStepMs(int minWidth) const;
     // The storyboard frame at `timeMs` over the video in [min, max], dimmed, with the time in a
     // pill above `barY`.
     // Above the pill, the chapter at `timeMs`; with `label`, the pill shows it instead of the time.
     void drawScrubPreview(Frame& frame, ImVec2 min, ImVec2 max, std::int64_t timeMs, float barY,
                           std::string_view label = {});
     // Precise seeking: the film strip centred on m_watch.fineMs, its time, play and close.
-    void drawFineSeek(Frame& frame, ImVec2 min, ImVec2 max);
+    // `durationMs` is the bar's length (a live stream's: what it keeps, up to the edge).
+    void drawFineSeek(Frame& frame, ImVec2 min, ImVec2 max, std::int64_t durationMs);
     void closeFineSeek(bool play);
     // Index of the chapter playing at `timeMs` (0 without chapters).
     [[nodiscard]] std::size_t chapterAt(std::int64_t timeMs) const;

@@ -17,6 +17,11 @@ constexpr float kChatSpacing = 6;     // dp between messages.
 constexpr float kChatFollowSlack = 4; // dp from the bottom still counted as following.
 // Within this of the edge counts as live: playback starts a few segments behind it anyway.
 constexpr std::int64_t kLiveEdgeSlackMs = 30'000;
+// s between asking whether a stream that has not started did; the server asks for 30 s.
+constexpr double kUpcomingMinPoll = 5;
+constexpr double kUpcomingMaxPoll = 60;
+constexpr double kUpcomingDefaultPoll = 30;
+constexpr int kUpcomingTitleLines = 2;
 
 } // namespace
 
@@ -178,6 +183,46 @@ void App::drawLiveChat(Frame& frame, ImVec2 min, ImVec2 max) {
         y += heights[i];
     }
     c.list()->PopClipRect();
+}
+
+void App::awaitStart(innertube::Upcoming upcoming) {
+    const double poll =
+        upcoming.pollMs > 0 ? static_cast<double>(upcoming.pollMs) / 1000 : kUpcomingDefaultPoll;
+    m_watch.upcomingPollAt = now() + std::clamp(poll, kUpcomingMinPoll, kUpcomingMaxPoll);
+    m_watch.upcoming = std::move(upcoming);
+}
+
+void App::pollUpcoming() {
+    if (!m_watch.upcoming || m_watch.upcomingPollAt < 0 || now() < m_watch.upcomingPollAt ||
+        m_watch.item.id.empty()) {
+        return;
+    }
+    // Asked as the first time: once it has started, it plays with its storyboard and subtitles.
+    m_watch.upcomingPollAt = -1;
+    startPlayback(m_watch.item.id);
+}
+
+void App::drawUpcoming(Frame& frame, ImVec2 min, ImVec2 max) {
+    // The official app's slate: the thumbnail, dimmed, under when the stream starts.
+    const Canvas& c = frame.canvas;
+    drawThumbnail(frame, m_watch.item.thumbnail, min, max, 0);
+    c.rect(min, max, theme::kScrim);
+    const innertube::Upcoming& upcoming = *m_watch.upcoming;
+    const float gutter = c.dp(theme::kGutter);
+    const float width = max.x - min.x - gutter * 4;
+    const Canvas heading = c.with(theme::kHeadingWeight);
+    const float titleHeight = heading.lineHeight(theme::kSectionSize);
+    const float subtitleHeight =
+        upcoming.subtitle.empty() ? 0 : c.lineHeight(theme::kBodySize) + c.dp(4);
+    float y = (min.y + max.y - titleHeight - subtitleHeight) * 0.5f;
+    y +=
+        heading.paragraph({min.x + gutter * 2, y}, width, theme::kSectionSize, theme::g_textPrimary,
+                          upcoming.title, kUpcomingTitleLines, TextAlign::Center) +
+        c.dp(4);
+    if (!upcoming.subtitle.empty()) {
+        c.line({min.x + gutter * 2, y}, width, theme::kBodySize, theme::g_textSecondary,
+               upcoming.subtitle, TextAlign::Center);
+    }
 }
 
 } // namespace sloptube::app

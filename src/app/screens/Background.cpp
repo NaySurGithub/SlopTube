@@ -5,6 +5,7 @@
 #include "app/ui/Strings.hpp"
 #include "app/ui/Theme.hpp"
 
+#include <algorithm>
 #include <tuple>
 
 namespace sloptube::app {
@@ -45,7 +46,13 @@ int App::idleWakeMs() const {
         // Video frames wake the loop, but not the end of playback or a stall: a slow tick does.
         return m_onScreen && !m_pictureInPicture ? kPlayingWakeMs : kBackgroundWakeMs;
     }
-    return m_typing ? kCaretBlinkMs : -1;
+    int wake = m_typing ? kCaretBlinkMs : -1;
+    // A stream that has not started is asked for again on time.
+    if (m_watch.upcoming && m_watch.upcomingPollAt >= 0) {
+        const int poll = std::max(0, static_cast<int>((m_watch.upcomingPollAt - now()) * 1000));
+        wake = wake < 0 ? poll : std::min(wake, poll);
+    }
+    return wake;
 }
 
 void App::onBridgeEvent(BridgeEvent event) {

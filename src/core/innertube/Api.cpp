@@ -511,8 +511,7 @@ Result<Storyboard> Api::storyboard(std::string_view videoId) {
     if (!root) {
         return std::unexpected(root.error());
     }
-    return parser::storyboard(
-        json::string(*root, "/storyboards/playerStoryboardSpecRenderer/spec"));
+    return parser::anyStoryboard(*root);
 }
 
 Result<std::string> Api::videoChannel(std::string_view videoId) {

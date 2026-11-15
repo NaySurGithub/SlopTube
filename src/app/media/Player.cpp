@@ -144,6 +144,8 @@ public:
 
     void setSpeed(float speed) { m_speed = speed; }
 
+    [[nodiscard]] float speed() const { return m_speed; }
+
     // Media time elapsed since the first queued sample, compensated for device latency.
     [[nodiscard]] std::int64_t playedUs() const {
         if (m_stream == nullptr || m_sampleRate == 0) {
@@ -561,6 +563,18 @@ struct Player::Session {
         }
     }
 
+    // Live: playback is as close to the edge as a fresh start would be, so faster than 1x would
+    // run out of segments.
+    [[nodiscard]] bool nearLiveEdge() const {
+        const auto offset = liveOffsetUs();
+        const auto edge = edgeNow();
+        if (!offset || !edge) {
+            return true; // Not known yet: it starts near the edge.
+        }
+        const std::int64_t edgeUs = *offset + (*edge + 1) * segmentUs;
+        return edgeUs - clockUs() <= (kLiveStartBehindSegments + 1) * segmentUs;
+    }
+
     // The broadcast is over: the edge is where it was last.
     void freezeEdge() {
         const std::scoped_lock lock(liveMutex);
@@ -711,7 +725,7 @@ bool Player::promote(std::string_view videoId) {
     }
     close();
     m_session = std::move(m_standby);
-    m_session->audio.setSpeed(m_session->info.details.live ? 1 : m_speed.load());
+    m_session->audio.setSpeed(m_speed);
     m_session->setStandby(false);
     m_session->paused = false;
     m_failed = false;
@@ -744,7 +758,7 @@ std::unique_ptr<Player::Session> Player::start(innertube::Player info, bool paus
     auto session = std::make_unique<Session>(std::move(info), std::move(streams), quality, paused);
     Session& running = *session;
     running.audioOnly = audioOnly && running.streams.audio && !running.info.details.live;
-    running.audio.setSpeed(paused || running.info.details.live ? 1 : m_speed.load());
+    running.audio.setSpeed(paused ? 1 : m_speed.load()); // A live stream's decoder caps it.
     running.decoder = std::thread([this, &running] {
         if (!guarded("decoder", [&] { decodeLoop(running); })) {
             running.state = PlayerState::Failed;
@@ -799,9 +813,13 @@ void Player::setPaused(bool paused) {
 
 void Player::setSpeed(float speed) {
     m_speed = speed;
-    if (m_session) {
-        m_session->audio.setSpeed(m_session->info.details.live ? 1 : speed);
+    if (m_session && !m_session->info.details.live) { // Its decoder applies it, up to the edge.
+        m_session->audio.setSpeed(speed);
     }
+}
+
+bool Player::canSpeedUp() const {
+    return m_session && (!m_session->info.details.live || !m_session->nearLiveEdge());
 }
 
 void Player::seek(std::int64_t positionUs) {
@@ -923,7 +941,10 @@ std::optional<Player::LiveWindow> Player::liveWindow() const {
     constexpr std::int64_t kDvrMarginSegments = 2;
     const std::int64_t startUs =
         std::max(*offset, edgeUs - session.dvrUs + kDvrMarginSegments * session.segmentUs);
-    return LiveWindow{.startUs = std::min(startUs, edgeUs), .edgeUs = edgeUs};
+    return LiveWindow{.startUs = std::min(startUs, edgeUs),
+                      .edgeUs = edgeUs,
+                      .zeroUs = *offset,
+                      .segmentUs = session.segmentUs};
 }
 
 void Player::setVideoHidden(bool hidden) {
@@ -1268,6 +1289,14 @@ void Player::decodeLoop(Session& session) {
         }
         const bool paused = session.paused;
         session.audio.setRunning(!paused && session.clockBaseUs >= 0);
+        // Faster than 1x catches up with a live stream, then plays it at 1x from the edge on.
+        if (main->live && !paused) {
+            const float wanted = m_speed;
+            const float speed = wanted > 1 && session.nearLiveEdge() ? 1 : wanted;
+            if (session.audio.speed() != speed) {
+                session.audio.setSpeed(speed);
+            }
+        }
 
         // Feed compressed samples to the decoders.
         if (main) {
