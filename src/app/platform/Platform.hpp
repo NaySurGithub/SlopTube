@@ -50,6 +50,13 @@ public:
     // Landscape with system bars hidden (swiping an edge shows them briefly). Leaving it returns
     // to portrait, and the orientation follows the device again once it is held upright.
     void setFullscreen(bool fullscreen);
+    // The screen's brightness while the app is shown, 0 to 1 (the system's until set); a negative
+    // value gives it back to the system.
+    [[nodiscard]] float windowBrightness();
+    void setWindowBrightness(float brightness);
+    // The media volume, 0 to 1, set without the system's volume panel.
+    [[nodiscard]] float musicVolume();
+    void setMusicVolume(float volume);
     // Dark icons in the status and navigation bars, for a light screen under each.
     void setLightSystemBars(bool statusBar, bool navigationBar);
     void openUrl(std::string_view url);

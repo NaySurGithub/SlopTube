@@ -10,13 +10,16 @@ import android.content.Intent;
 import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.content.res.Resources;
 import android.media.AudioManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.util.Rational;
+import android.view.WindowManager;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -282,6 +285,65 @@ public final class SlopTubeActivity extends NativeActivity {
             return intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent.class);
         }
         return intent.getParcelableExtra(Intent.EXTRA_INTENT);
+    }
+
+    // --- Brightness and volume -----------------------------------------------------------------
+
+    // The window's own brightness, 0 to 1, or the system's while the window has none.
+    public float windowBrightness() {
+        float own = getWindow().getAttributes().screenBrightness;
+        if (own >= 0) {
+            return own;
+        }
+        try {
+            return Math.min(1f, (float) Settings.System.getInt(getContentResolver(),
+                    Settings.System.SCREEN_BRIGHTNESS) / brightnessSettingMaximum());
+        } catch (Settings.SettingNotFoundException unknown) {
+            return 0.5f;
+        }
+    }
+
+    // The system brightness setting's range: 255 on most phones, more on some (2047 or 4095 on
+    // some Xiaomi models), as the framework's own resource says.
+    private static int brightnessSettingMaximum() {
+        Resources system = Resources.getSystem();
+        int id = system.getIdentifier("config_screenBrightnessSettingMaximum", "integer",
+                "android");
+        if (id != 0) {
+            try {
+                return Math.max(1, system.getInteger(id));
+            } catch (Resources.NotFoundException missing) {
+                // Falls back to the usual range.
+            }
+        }
+        return 255;
+    }
+
+    // Overrides the screen's brightness while the app is shown, 0 to 1; a negative value goes back
+    // to the system's. Needs no permission and leaves the phone's setting alone.
+    public void setWindowBrightness(final float brightness) {
+        runOnUiThread(() -> {
+            WindowManager.LayoutParams attributes = getWindow().getAttributes();
+            attributes.screenBrightness = brightness < 0
+                    ? WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                    : Math.max(0.01f, Math.min(1f, brightness));
+            getWindow().setAttributes(attributes);
+        });
+    }
+
+    // The media volume, 0 to 1.
+    public float musicVolume() {
+        AudioManager audio = getSystemService(AudioManager.class);
+        int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+        return max > 0 ? (float) audio.getStreamVolume(AudioManager.STREAM_MUSIC) / max : 0f;
+    }
+
+    // Sets the media volume, 0 to 1, without the system's volume panel.
+    public void setMusicVolume(float volume) {
+        AudioManager audio = getSystemService(AudioManager.class);
+        int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+        audio.setStreamVolume(AudioManager.STREAM_MUSIC,
+                Math.round(Math.max(0f, Math.min(1f, volume)) * max), 0);
     }
 
     // --- Voice search ---------------------------------------------------------------------------
