@@ -69,11 +69,14 @@ public:
     [[nodiscard]] bool audioOnly() const;
 
     void setPaused(bool paused);
-    // Playback rate, pitch preserved: 1 is normal, 2 twice as fast. Carries over to later videos;
-    // live streams always play at 1.
+    // Playback rate, pitch preserved: 1 is normal, 2 twice as fast. Carries over to later videos.
+    // A live stream plays faster only while behind its edge, and at 1x once it has caught up.
     void setSpeed(float speed);
 
     [[nodiscard]] float speed() const { return m_speed; }
+
+    // A faster speed would take effect now: not at a live stream's edge.
+    [[nodiscard]] bool canSpeedUp() const;
 
     // A live stream seeks within liveWindow(); at its edge, it goes back to playing live.
     void seek(std::int64_t positionUs);
@@ -105,6 +108,12 @@ public:
     struct LiveWindow {
         std::int64_t startUs = 0;
         std::int64_t edgeUs = 0;
+        std::int64_t zeroUs = 0;    // Where segment 0 starts; segment n starts n segments later.
+        std::int64_t segmentUs = 0; // Media time of one segment.
+
+        [[nodiscard]] std::int64_t segmentAt(std::int64_t mediaUs) const {
+            return segmentUs > 0 ? (mediaUs - zeroUs) / segmentUs : -1;
+        }
     };
 
     [[nodiscard]] std::optional<LiveWindow> liveWindow() const;

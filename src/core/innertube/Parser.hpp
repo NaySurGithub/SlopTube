@@ -13,12 +13,16 @@ namespace sloptube::innertube::parser {
 
 [[nodiscard]] Page page(json::Element root);
 
-// Seek-preview sheets from a player response's storyboard spec.
 // The queue of a mix from a `next` response asked with its playlist id: the first shelf of the
 // watch page's suggestions ("Up next"), videos only.
 [[nodiscard]] Page mixQueue(json::Element root);
 
+// Seek-preview sheets from a player response's storyboard spec.
 [[nodiscard]] Storyboard storyboard(std::string_view spec);
+// The same for a live stream's spec, whose frames are its segments.
+[[nodiscard]] Storyboard liveStoryboard(std::string_view spec);
+// Whichever of the two a player response carries.
+[[nodiscard]] Storyboard anyStoryboard(json::Element root);
 [[nodiscard]] Result<Player> player(json::Element root);
 
 // Subtitle tracks listed by a `player` response; empty when the client is not given any.
